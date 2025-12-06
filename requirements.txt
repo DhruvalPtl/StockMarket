@@ -1,0 +1,15 @@
+pandas
+numpy
+python-dotenv
+requests
+websockets
+schedule
+scikit-learn
+tensorflow
+torch
+yfinance
+ta
+pytest
+uvicorn
+fastapi
+python-multipart

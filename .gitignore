@@ -1,0 +1,47 @@
+# ----------------------------
+# Python
+# ----------------------------
+__pycache__/
+*.pyc
+*.pyo
+*.pyd
+*.pdb
+*.core
+
+# Virtual environment
+.venv/
+venv/
+env/
+
+# ----------------------------
+# Project-specific folders
+# ----------------------------
+data/
+logs/
+models/
+notebooks/__pycache__/
+
+# ----------------------------
+# Environment files (NEVER commit secrets)
+# ----------------------------
+.env
+.env.*
+
+# ----------------------------
+# VS Code & Editor
+# ----------------------------
+.vscode/
+*.code-workspace
+
+# ----------------------------
+# OS-specific files
+# ----------------------------
+.DS_Store
+Thumbs.db
+
+# ----------------------------
+# Docker
+# ----------------------------
+*.pid
+*.seed
+*.log
