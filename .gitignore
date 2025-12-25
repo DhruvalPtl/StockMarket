@@ -48,12 +48,12 @@ Thumbs.db
 *.log
 
 
-notebooks\current\master_features.parquet
-notebooks\current\master_labeled.csv
-notebooks\current\master_labeled.parquet
-notebooks\current\nifty_data_norm_oi.csv
-notebooks\gemini\nifty_data_norm_oi.csv
-notebooks\master_labeled.parquet
-notebooks\nifty_data\master_labeled.parquet
-notebooks\nifty_data_norm_oi - Copy.csv
-notebooks\nifty_data_norm_oi.csv
+notebooks/current/master_features.parquet
+notebooks/current/master_labeled.csv
+notebooks/current/master_labeled.parquet
+notebooks/current/nifty_data_norm_oi.csv
+notebooks/gemini/nifty_data_norm_oi.csv
+notebooks/master_labeled.parquet
+notebooks/nifty_data/master_labeled.parquet
+notebooks/nifty_data_norm_oi - Copy.csv
+notebooks/nifty_data_norm_oi.csv

@@ -1,0 +1,2 @@
+Time_Entry,Time_Exit,Strike_Name,Nifty_Entry,Nifty_Exit,Opt_Entry,Opt_Exit,Max_Price,Trailing_Px,SL_Price,PnL,Balance,Reason
+2025-12-15 12:00:00,2025-12-15 12:45:00,NSE-NIFTY-30Dec25-26250-CE,26102.0,-,127.0,119.0,130.4,Pending,119.0,-600.0,9400.0,SL Hit

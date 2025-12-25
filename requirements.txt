@@ -5,7 +5,6 @@ requests
 websockets
 schedule
 scikit-learn
-tensorflow
 torch
 yfinance
 ta

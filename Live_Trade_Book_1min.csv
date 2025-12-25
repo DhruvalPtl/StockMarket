@@ -1,0 +1,2 @@
+Date,Entry Time,Exit Time,Type,Strike,Opt Buy,Opt Sell,Nifty Entry,Nifty Exit,EMA5 Entry,EMA13 Entry,PnL,Balance,Reason
+2025-12-18,15:27:01,15:29:50,CE,NSE-NIFTY-23Dec25-25800-CE,119.95,120.85,25816.7,25806.7,25816.6,25815.0,67.5,10067.5,REVERSAL

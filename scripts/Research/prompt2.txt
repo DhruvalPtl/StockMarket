@@ -1,0 +1,27 @@
+Role: You are a Senior Quantitative Architect specializing in Market Microstructure and Structural Geometry. Your goal is to design a mechanical trading logic for the Nifty 50 Index (India).
+
+The Market Observations (The Foundation): I have identified a specific structural behavior in the Nifty 50 that my bot must exploit:
+
+The Impulse (Morning Burst): The day often begins with a high-energy "Burst" of ~100 points.
+
+The Digestion (Rest): Following this burst, the market undergoes a 5-10 minute consolidation.
+
+The Exhaustion (Slow Grind): The market then attempts to extend the initial move slowly (grinding) for another 50-60 points until it reaches a "Structural Wall" (Daily Resistance or Support).
+
+The Higher Timeframe Rhythm: On a 1-hour timeframe, Nifty typically exhibits a mean-reversion "swing" behavior (Up-Down rotations) that completes a cycle over an average of 5 days.
+
+The Mission: Design a strategy for Intraday Option Buying with a capital of ₹10,000. The bot only trades for a single day, but it uses the 5-day rhythm to set its "Daily Bias."
+
+Your Task:
+
+Detecting the "Wall": From a first-principles perspective, define the mechanical relationship between Price Velocity and Volume that indicates the "Slow Grind" has reached its exhaustion point (The Wall).
+
+The Convergence Logic: How should the bot align the intraday "Exhaustion at the Wall" with the "5-Day Macro Swing"? For example: If we are on Day 4 of a 5-day "Up" rotation and hit an intraday Resistance Wall, what mechanical signals distinguish a "Healthy Pullback" from a "Cycle Reversal"?
+
+Mechanical Detection of a "Cycle Break": Since the 5-day cycle is an average but not a rule, what specific price-action behavior (e.g., expansion of range, volume climaxes, or derivative shifts) indicates that the 5-day mean-reversion rhythm has "Broken" and a new runaway trend has started? The bot must detect this to avoid being "run over" while waiting for a reversal.
+
+The "Trap" vs. "Breakout" Filter: When the market hits the Wall, it often "fake-breaks" before reversing. Provide a mechanical rule-set to distinguish a "Liquidity Trap" from a "Structural Breakout."
+
+Execution Strategy: Describe the entry and exit logic purely through mechanical rules (Price levels, Velocity, and Delta/OI behavior).
+
+Provide logic based on Market Mechanics only. Focus on the "Physics" of the price move and the "Sentiment" of the Option Chain.

@@ -1,0 +1,2 @@
+Time_Buy,Time_Sell,Strike_Name,Type,Nifty_Entry,Nifty_Exit,Opt_Entry,Opt_Exit,Max_Price,Trailing_SL_Price,Stop_Loss_Price,PnL,Balance,Reason
+12:19:51,12:44:06,NSE-NIFTY-23DEC25-26150-PE,PE,26148.35,26124.95,61.5,44.25,65.8,64.5,56.5,-1293.75,8706.25,SL Hit

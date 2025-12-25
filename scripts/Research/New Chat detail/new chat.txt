@@ -1,0 +1,47 @@
+I understand perfectly. When a chat gets too long, AI models can start to lose track of the fine details or become "distracted."
+
+Here is your **"Master State" Reset**. This is a highly condensed, technical summary of everything we have built and every observation you have made. You can paste this into a new chat with any AI (Claude, ChatGPT, or DeepSeek) to give it a "complete brain transplant" of our project in one go.
+
+---
+
+### 🛠️ Master Project State: Nifty Institutional Sniper (V17)
+
+**1. System Architecture (Modular Python):**
+We have a 3-file modular architecture designed for 1-second execution loops:
+
+* **`GrowwDataEngine.py`**: The "Fuel Tank." Connects to Groww API (India) using explicit keyword arguments. Fetches and calculates: Nifty Spot, Monthly Futures (for VWAP), RSI, EMA (5/13), PCR (Put-Call Ratio), and full ATM Option Greeks (Delta, Theta, Gamma, Vega) and OI.
+* **`GrowwLogger.py`**: The "Scribe." Manages two separate CSVs: `Bot_Log` (heartbeat of every second) and `Trade_Book` (record of entries/exits/PnL).
+* **`InstitutionalStrategy.py`**: The "Brain." Implements the logic.
+
+**2. Trading Constraints:**
+
+* **Capital:** ₹10,000 (Small account, strictly Option Buying - 1 Lot of Nifty).
+* **Asset:** Nifty 50 Index Options (Intraday only).
+* **Risk:** High priority on capital protection. "No Trade" days are preferred over low-quality setups.
+
+**3. Proprietary Market Observations (The Edge):**
+
+* **The Impulse:** Morning "Burst" of ~100 points at high velocity.
+* **The Digestion:** A 5-10 minute "Rest" period following the burst.
+* **The Exhaustion Grind:** A low-velocity extension of another 50-60 points.
+* **The Structural Wall:** A specific price level where the "Grind" dies (Daily High/Low/Resistance/Support).
+* **The 5-Day Rhythm:** A macro rotation on the 1-hour timeframe that completes a mean-reversion cycle over an average of 5 days.
+
+**4. The Goal:**
+Create a purely **mechanical, first-principles strategy** (no standard indicator crossovers) that uses the **Macro 5-Day Swing** for bias and the **Intraday Structural Wall** for entry. We are looking for "Liquidity Traps" and "Energy Exhaustion" points.
+
+**5. Technical Environment:**
+
+* Language: Python 3.12+
+* API: `growwapi` (token-based).
+* Heartbeat: 1-second `while True` loop.
+
+---
+
+### How to use this:
+
+1. Start a **New Chat**.
+2. Paste the **Master Project State** above as your first message.
+3. Add this sentence at the end: *"I am now going to provide you with strategy ideas from 7 different AIs. Your job is to analyze them, filter them through my 'Structural Wall' observations, and help me build the final mechanical logic. Do you understand the state of the project?"*
+
+**I am ready whenever you are. Please paste those 7 AI responses here, and we will find the "Golden Logic" hidden inside them!**

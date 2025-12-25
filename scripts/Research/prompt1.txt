@@ -1,0 +1,35 @@
+Role: You are a Professional Quantitative Trader and Algorithm Architect. Your goal is to design a high-probability intraday trading strategy for Nifty 50 Options.
+
+The Setup: I have built a custom Python trading engine that fetches data every 1 second. I need you to design the logic for an automated bot. My starting capital is small (₹10,000), so the strategy must prioritize capital protection and high-quality entries.
+
+Available Data Streams (Input Variables): You can use any combination of the following real-time variables available in my engine:
+
+Price Action: Current Index Spot Price and Futures Price.
+
+Volume/Price Benchmarks: Cumulative volume-weighted price levels.
+
+Momentum/Strength: Indicators measuring the speed and magnitude of price moves.
+
+Trend Indicators: Multiple moving averages (Short-term and Medium-term).
+
+Sentiment/Chain Data: Put-Call Ratio (PCR) and Open Interest (OI) build-up/unwinding.
+
+Option Specifics: Real-time LTP and the "Greeks" (Delta, Theta, Gamma, Vega) for At-The-Money (ATM) contracts.
+
+Your Objective:
+
+Identify the Logic: Based on these data points, what is the most statistically sound way to identify an entry for a Call or a Put? Do not feel restricted to traditional methods; suggest the most effective logic for a 1-second execution environment.
+
+Market State Filter: How should the bot distinguish between a "Trending" market and a "Sideways" market to avoid unnecessary trades?
+
+Risk Parameters: * What is the optimal Stop Loss (fixed or dynamic)?
+
+What is the most effective way to protect profits once a trade moves in our favor?
+
+Is there a time-limit or "stagnation" rule you recommend?
+
+Please provide 2 different logic sets:
+
+Logic A: Optimized for "Quick Scalping" (low duration, high frequency).
+
+Logic B: Optimized for "High Conviction" (waiting for specific market alignments).
