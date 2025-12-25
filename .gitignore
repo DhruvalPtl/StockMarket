@@ -9,6 +9,7 @@ __pycache__/
 *.core
 
 # Virtual environment
+.venv312/
 .venv/
 venv/
 env/
