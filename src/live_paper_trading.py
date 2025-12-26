@@ -29,9 +29,9 @@ TRAIL_GAP = 3.0
 # SYSTEM
 IST = pytz.timezone('Asia/Kolkata')
 _ts = datetime.datetime.now(IST).strftime("%Y%m%d_%H%M%S")
-LOG_FILE = f"Live_System_Log_{_ts}.txt"
-TRACKER_FILE = f"Live_Super_Tracker_{_ts}.csv"
-TRADE_BOOK = f"Live_Trade_Book_{_ts}.csv"
+LOG_FILE = f"D:\\StockMarket\\StockMarket\\live_paper_trading\\Live_System_Log_{_ts}.txt"
+TRACKER_FILE = f"D:\\StockMarket\\StockMarket\\live_paper_trading\\Live_Super_Tracker_{_ts}.csv"
+TRADE_BOOK = f"D:\\StockMarket\\StockMarket\\live_paper_trading\\Live_Trade_Book_{_ts}.csv"
 
 # STATE
 groww = None
