@@ -1,0 +1,2 @@
+Timestamp,Spot_LTP,Fut_LTP,RSI,RSI_Ready,VWAP,EMA5,EMA13,ATM_Strike,PCR,Total_CE_OI,Total_PE_OI,CE_Symbol,CE_Strike,CE_LTP,CE_OI,CE_Delta,CE_Gamma,CE_Theta,CE_Vega,CE_IV,PE_Symbol,PE_Strike,PE_LTP,PE_OI,PE_Delta,PE_Gamma,PE_Theta,PE_Vega,PE_IV
+10:59:46,0.0,26109.5,50,False,26109.5,0.0,0.0,0,0.0,0,0,,0,0,0,0,0,0,0,0,,0,0,0,0,0,0,0,0
