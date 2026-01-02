@@ -1,6 +1,0 @@
-Timestamp,Spot_LTP,Fut_LTP,RSI,RSI_Ready,VWAP,EMA5,EMA13,ATM_Strike,PCR,Total_CE_OI,Total_PE_OI,CE_Symbol,CE_Strike,CE_LTP,CE_OI,CE_Delta,CE_Gamma,CE_Theta,CE_Vega,CE_IV,PE_Symbol,PE_Strike,PE_LTP,PE_OI,PE_Delta,PE_Gamma,PE_Theta,PE_Vega,PE_IV
-09:16:10,25903.75,0.0,50,False,0.0,0.0,0.0,25900,0,0,0,,0,0,0,0,0,0,0,0,,0,0,0,0,0,0,0,0
-09:16:18,25908.2,0.0,50,False,0.0,0.0,0.0,25900,0,0,0,,0,0,0,0,0,0,0,0,,0,0,0,0,0,0,0,0
-09:16:24,25903.3,0.0,50,False,0.0,0.0,0.0,25900,0,0,0,,0,0,0,0,0,0,0,0,,0,0,0,0,0,0,0,0
-09:16:32,25904.4,0.0,50,False,0.0,0.0,0.0,25900,0,0,0,,0,0,0,0,0,0,0,0,,0,0,0,0,0,0,0,0
-09:16:39,25905.9,0.0,50,False,0.0,0.0,0.0,25900,0,0,0,,0,0,0,0,0,0,0,0,,0,0,0,0,0,0,0,0

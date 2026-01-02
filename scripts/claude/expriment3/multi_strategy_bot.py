@@ -13,8 +13,8 @@ import time
 import sys
 from datetime import datetime, timedelta
 from growwapi import GrowwAPI
-from enhanced_data_pipeline import GrowwDataEngine
-from enhanced_logger import GrowwLogger, MultiStrategyLogger
+from claude_groww_data_pipeline import GrowwDataEngine
+from claude_groww_logger import GrowwLogger, MultiStrategyLogger
 from strategies import StrategyA, StrategyB, StrategyC
 
 
@@ -25,21 +25,21 @@ from strategies import StrategyA, StrategyB, StrategyC
 class StrategyConfig:
     """Shared config for all strategies""" 
     # RSI thresholds
-    rsi_oversold = 35
-    rsi_overbought = 65
+    rsi_oversold = 40
+    rsi_overbought = 60
     
     # Momentum thresholds for Strategy C
-    rsi_momentum_low = 55
-    rsi_momentum_high = 75
-    rsi_momentum_low_bear = 25
-    rsi_momentum_high_bear = 45
-    min_candle_body = 12
+    rsi_momentum_low = 50
+    rsi_momentum_high = 70
+    rsi_momentum_low_bear = 30
+    rsi_momentum_high_bear = 50
+    min_candle_body = 10
     
     # Exit parameters
-    target_points = 12
-    stop_loss_points = 6
-    trailing_stop_activation = 0.4
-    trailing_stop_distance = 0.04
+    target_points = 20
+    stop_loss_points = 10
+    trailing_stop_activation = 0.5
+    trailing_stop_distance = 0.15
 
 
 # ============================================================
@@ -136,26 +136,21 @@ class StrategyRunner:
     def place_order(self, signal):
         """Execute order - PAPER TRADING"""
         try:
-            # Determine option type
             if signal == 'BUY_CE':
+                symbol = self.engine.atm_ce['symbol']
+                entry_price = self.engine.atm_ce['ltp']
+                strike = self.engine.atm_ce['strike']
                 option_type = 'CE'
             else:
+                symbol = self.engine.atm_pe['symbol']
+                entry_price = self.engine.atm_pe['ltp']
+                strike = self.engine.atm_pe['strike']
                 option_type = 'PE'
             
-            # Calculate max affordable cost (70% of capital)
-            max_cost = self.capital * 0.9
-            
-            # Find affordable strike (ATM or OTM if ATM too expensive)
-            option_data = self.engine.get_affordable_strike(option_type, max_cost)
-            
-            if option_data is None:
-                print(f"\n[{self.strategy_name}] ⚠️ No affordable {option_type} strike found (max: Rs.{max_cost:.2f})")
+            # Affordability check
+            total_cost = entry_price * self.lot_size
+            if total_cost > self.capital * 0.7:
                 return False
-            
-            # Extract option details
-            symbol = option_data['symbol']
-            entry_price = option_data['ltp']
-            strike = option_data['strike']
             
             # Store entry strike
             self.entry_strike = strike
@@ -174,11 +169,7 @@ class StrategyRunner:
                 'trailing_activated': False
             }
             
-            # Show if OTM was selected
-            atm_strike = self.engine.atm_strike
-            strike_type = "ATM" if strike == atm_strike else f"OTM ({abs(strike - atm_strike)} pts)"
-            
-            print(f"\n[{self.strategy_name}] 🟢 ENTRY: {option_type} @ {strike} ({strike_type}) | Rs.{entry_price:.2f}")
+            print(f"\n[{self.strategy_name}] 🟢 ENTRY: {option_type} @ {strike} | Rs.{entry_price:.2f}")
             
             return True
         
@@ -186,13 +177,8 @@ class StrategyRunner:
             print(f"\n[{self.strategy_name}] ❌ Order Error: {e}")
             return False
     
-    """
-    FIXED: get_current_option_price() with better error handling
-    Location: multi_strategy_bot.py (replace existing method in StrategyRunner class)
-    """
-
     def get_current_option_price(self):
-        """Get current price for the strike we entered - ROBUST VERSION"""
+        """Get current price for the strike we entered"""
         if not self.active_position or not self.entry_strike:
             return 0
         
@@ -200,76 +186,50 @@ class StrategyRunner:
         entry_strike = self.entry_strike
         current_atm = self.engine.atm_strike
         
-        # PHASE 1: Fast Path - If still trading ATM strike, use engine's live data
+        # If still ATM, use cached
         if entry_strike == current_atm:
             if option_type == 'CE':
-                price = self.engine.atm_ce['ltp']
+                return self.engine.atm_ce['ltp']
             else:
-                price = self.engine.atm_pe['ltp']
-            
-            # ✅ FIX: Validate price before returning
-            if price > 0:
-                return price
-            # If ATM price is 0, fall through to API call
+                return self.engine.atm_pe['ltp']
         
-        # PHASE 2: Check engine's strikes_data cache
-        if entry_strike in self.engine.strikes_data:
-            if option_type in self.engine.strikes_data[entry_strike]:
-                price = self.engine.strikes_data[entry_strike][option_type]['ltp']
-                if price > 0:
-                    return price
-        
-        # PHASE 3: Fallback to direct API call
+        # Fetch via API
         try:
-            symbol = self.active_position['symbol']
-            search_key = f"NSE_{symbol}"
+            dt = datetime.strptime(self.engine.expiry_date, "%Y-%m-%d")
+            year = dt.strftime("%y")
+            month = dt.strftime("%b").upper()
+            symbol = f"NIFTY{year}{month}{int(entry_strike)}{option_type}"
             
             ltp_response = self.engine.groww.get_ltp(
                 segment="FNO",
-                exchange_trading_symbols=search_key
+                exchange_trading_symbols=f"NSE_{symbol}"
             )
             
-            if ltp_response and search_key in ltp_response:
-                price = ltp_response[search_key]
+            key = f"NSE_{symbol}"
+            if ltp_response and key in ltp_response:
+                price = ltp_response[key]
                 if price > 0:
                     return price
             
-            # ✅ FIX: If API returns 0 or fails, use last known price as fallback
-            # This prevents position from appearing frozen
-            if 'last_valid_price' in self.active_position:
-                print(f"\n⚠️ Using last valid price for {symbol}: Rs.{self.active_position['last_valid_price']:.2f}")
-                return self.active_position['last_valid_price']
-            
-            # Last resort: use entry price (prevents division by zero)
-            print(f"\n⚠️ Price unavailable for {symbol}, using entry price")
-            return self.active_position['entry_price']
+            # Fallback
+            if option_type == 'CE':
+                return self.engine.atm_ce['ltp']
+            return self.engine.atm_pe['ltp']
         
         except Exception as e:
-            # ✅ FIX: Don't crash on API error, use entry price
-            if self.update_count % 10 == 0:  # Print error every 10 updates
-                print(f"\n⚠️ Price fetch error for {self.active_position['symbol']}: {e}")
-            
-            # Return last valid price or entry price
-            return self.active_position.get('last_valid_price', self.active_position['entry_price'])
+            if option_type == 'CE':
+                return self.engine.atm_ce['ltp']
+            return self.engine.atm_pe['ltp']
     
-    """
-    FIXED: manage_position() with last valid price tracking
-    Location: multi_strategy_bot.py (replace existing method in StrategyRunner class)
-    """
-
     def manage_position(self):
-        """Monitor and exit position - ROBUST VERSION"""
+        """Monitor and exit position"""
         if not self.active_position:
             return
         
         current_price = self.get_current_option_price()
         
-        # ✅ FIX: Skip update if price is 0 (API failure)
         if current_price == 0:
             return
-        
-        # ✅ NEW: Store last valid price for fallback
-        self.active_position['last_valid_price'] = current_price
         
         # Update peak
         if current_price > self.active_position['peak']:
@@ -298,24 +258,20 @@ class StrategyRunner:
             profit_pct = (current_price - entry_price) / entry_price
             target_profit_pct = (target_price - entry_price) / entry_price
             
-            # Activate trailing stop at 50% of target
             if profit_pct >= (target_profit_pct * self.config.trailing_stop_activation):
                 if not self.active_position['trailing_activated']:
                     self.active_position['trailing_activated'] = True
-                    print(f"\n🔒 [{self.strategy_name}] Trailing stop ACTIVATED @ Rs.{current_price:.2f}")
                 
-                # Trail at 15% below peak
                 trailing_stop = peak_price * (1 - self.config.trailing_stop_distance)
                 
                 if current_price <= trailing_stop:
                     exit_reason = "TRAILING_STOP"
         
-        # 4. Time exit (30 minutes)
+        # 4. Time exit
         hold_time = (datetime.now() - self.active_position['entry_time']).seconds / 60
         if hold_time > 30:
             exit_reason = "TIME_EXIT"
         
-        # Execute exit if triggered
         if exit_reason:
             self.exit_position(current_price, pnl, exit_reason)
     
@@ -356,19 +312,6 @@ class StrategyRunner:
         
         current_price = self.get_current_option_price()
         return (current_price - self.active_position['entry_price']) * self.lot_size
-    
-    def print_pnl_summary(self):
-        total_pnl = sum(t["pnl"] for t in self.trade_book if "pnl" in t)
-        wins = sum(1 for t in self.trade_book if t.get("pnl", 0) > 0)
-        losses = sum(1 for t in self.trade_book if t.get("pnl", 0) < 0)
-
-        print(
-            f"[{self.strategy_name}] "
-            f"Trades: {len(self.trade_book)} | "
-            f"Wins: {wins} | Losses: {losses} | "
-            f"Net PnL: ₹{total_pnl:.2f}"
-        )
-
 
 
 # ============================================================
@@ -385,31 +328,29 @@ class OriginalStrategy:
         self.early_trading_active = False
     
     def check_entry(self, row, prev_row=None):
-        """Original bot entry logic - FIXED: FUTURES vs VWAP"""
+        """Original bot entry logic"""
+        # This is the exact logic from analyze_market_conditions + check_entry_conditions
         
-        # ✅ FIXED: Use FUTURES price (not SPOT) for VWAP comparison
-        futures = row['fut_close']
         spot = row['close']
         vwap = row['vwap']
-        pcr = row.get('pcr', 0)
+        pcr = row.get('pcr', 0)  # Will be added
         rsi = row['rsi']
         
-        if vwap == 0 or futures == 0:
+        if vwap == 0 or spot == 0:
             return None
         
         # Check if RSI ready (simplified - will be checked externally)
         rsi_ready = rsi != 50  # If RSI is not default 50, it's calculated
         
-        # Market bias analysis - ✅ USING FUTURES vs VWAP
+        # Market bias analysis
         if not rsi_ready and self.early_trading_mode:
             # Early mode
             bullish_signals = 0
             bearish_signals = 0
             
-            # ✅ FIXED: Compare FUTURES to VWAP (not SPOT)
-            if futures > vwap:
+            if spot > vwap:
                 bullish_signals += 2
-            elif futures < vwap:
+            elif spot < vwap:
                 bearish_signals += 2
             
             if pcr > 1.1:
@@ -437,10 +378,9 @@ class OriginalStrategy:
             bullish_signals = 0
             bearish_signals = 0
             
-            # ✅ FIXED: Compare FUTURES to VWAP (not SPOT)
-            if futures > vwap:
+            if spot > vwap:
                 bullish_signals += 2
-            elif futures < vwap:
+            elif spot < vwap:
                 bearish_signals += 2
             
             if ema5 > ema13 and spot > ema5:
@@ -465,25 +405,25 @@ class OriginalStrategy:
             else:
                 return None
         
-        # Entry conditions - ✅ USING FUTURES vs VWAP
+        # Entry conditions
         if market_bias == 'BULLISH':
             if not rsi_ready:
                 # Early mode entry
-                if futures > vwap:
+                if spot > vwap:
                     return 'BUY_CE'
             else:
                 # Full mode entry
-                if futures > vwap and 55 <= rsi <= 75:
+                if spot > vwap and 55 <= rsi <= 75:
                     return 'BUY_CE'
         
         elif market_bias == 'BEARISH':
             if not rsi_ready:
                 # Early mode entry
-                if futures < vwap:
+                if spot < vwap:
                     return 'BUY_PE'
             else:
                 # Full mode entry
-                if futures < vwap and 25 <= rsi <= 45:
+                if spot < vwap and 25 <= rsi <= 45:
                     return 'BUY_PE'
         
         return None
@@ -504,7 +444,7 @@ class OriginalStrategyRunner(StrategyRunner):
 # ============================================================
 
 class MultiStrategyBot:
-    def __init__(self, api_key, api_secret, expiry_date, future_expiry_date, capital=10000):
+    def __init__(self, api_key, api_secret, expiry_date, capital=10000):
         print("\n" + "="*80)
         print("🚀 MULTI-STRATEGY NIFTY OPTIONS BOT v3.0")
         print("="*80)
@@ -514,7 +454,7 @@ class MultiStrategyBot:
         self.capital = capital
         
         # Initialize shared data engine
-        fut_symbol = f"NSE-NIFTY-{self._format_expiry_symbol(future_expiry_date)}-FUT"
+        fut_symbol = f"NSE-NIFTY-{self._format_expiry_symbol(expiry_date)}-FUT"
         self.engine = GrowwDataEngine(api_key, api_secret, expiry_date, fut_symbol)
         self.engine.disable_debug()
         
@@ -737,8 +677,7 @@ if __name__ == "__main__":
     # Configuration
     API_KEY = "eyJraWQiOiJaTUtjVXciLCJhbGciOiJFUzI1NiJ9.eyJleHAiOjI1NTQ1MzcwMzEsImlhdCI6MTc2NjEzNzAzMSwibmJmIjoxNzY2MTM3MDMxLCJzdWIiOiJ7XCJ0b2tlblJlZklkXCI6XCJkYjY5YTI4MS04YzVkLTRhZDMtYTYwMy1iMWRkZjlmMjBkZGZcIixcInZlbmRvckludGVncmF0aW9uS2V5XCI6XCJlMzFmZjIzYjA4NmI0MDZjODg3NGIyZjZkODQ5NTMxM1wiLFwidXNlckFjY291bnRJZFwiOlwiMDdmMDA0MGMtZTk4Zi00ZDNmLTk5Y2EtZDc1ZjBlYWU5M2NlXCIsXCJkZXZpY2VJZFwiOlwiZDMyMWIxMzUtZWQ5Mi01ZWJkLWJjMDUtZTY1NDY2OWRiMDM5XCIsXCJzZXNzaW9uSWRcIjpcIjJmZmJiNTM1LWRkODQtNDVhZS1hMjkwLWUyZWFmMGQ3NGZlMFwiLFwiYWRkaXRpb25hbERhdGFcIjpcIno1NC9NZzltdjE2WXdmb0gvS0EwYk1yOE5XVzhzdTNvZ080am1ZUzIwZEpSTkczdTlLa2pWZDNoWjU1ZStNZERhWXBOVi9UOUxIRmtQejFFQisybTdRPT1cIixcInJvbGVcIjpcImF1dGgtdG90cFwiLFwic291cmNlSXBBZGRyZXNzXCI6XCIyNDA5OjQwOTA6MTA4ZjpkYzA1OmQwYjg6ZWQ2ZTozOTc0OmJmMTUsMTYyLjE1OC41MS4xNzUsMzUuMjQxLjIzLjEyM1wiLFwidHdvRmFFeHBpcnlUc1wiOjI1NTQ1MzcwMzEzODJ9IiwiaXNzIjoiYXBleC1hdXRoLXByb2QtYXBwIn0.C_j_AbvZPNY1wb7hjEMGGO9CP0xhen40jwWMRLPKh73dd6T8sQKn32HmTkpAQtUzdEm2YCxPaJdy3aW_ojvo7A"
     API_SECRET = "cE#YaAvu27#kS)axpmB1p#4kKlvv7%ef"
-    EXPIRY_DATE = "2026-01-06"
-    FUTURE_EXPIRY_DATE = "2026-01-27"
+    EXPIRY_DATE = "2025-12-30"
     CAPITAL = 10000  # Per strategy
     
     print("\n⚠️ PAPER TRADING MODE - No real orders!\n")
@@ -748,8 +687,7 @@ if __name__ == "__main__":
         api_key=API_KEY,
         api_secret=API_SECRET,
         expiry_date=EXPIRY_DATE,
-        future_expiry_date=FUTURE_EXPIRY_DATE,
         capital=CAPITAL
     )
-    bot.engine.enable_debug()
+    
     bot.run()

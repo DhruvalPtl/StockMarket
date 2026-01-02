@@ -17,7 +17,7 @@ env/
 # ----------------------------
 # Project-specific folders
 # ----------------------------
-
+data/
 logs/
 models/
 notebooks/__pycache__/
@@ -57,6 +57,3 @@ notebooks/master_labeled.parquet
 notebooks/nifty_data/master_labeled.parquet
 notebooks/nifty_data_norm_oi - Copy.csv
 notebooks/nifty_data_norm_oi.csv
-data/master_features.parquet
-data/master_labeled.csv
-data/master_labeled.parquet

@@ -11,7 +11,7 @@ from datetime import datetime
 class GrowwLogger:
     def __init__(self, strategy_name="ORIGINAL"):
         date_str = datetime.now().strftime('%Y%m%d')
-        base_path = "D:\\StockMarket\\StockMarket\\scripts\\claude\\expriment3"
+        base_path = "D:\\StockMarket\\StockMarket\\scripts\\claude"
         
         # Strategy-specific files
         safe_name = strategy_name.replace(" ", "_").replace("-", "_")
@@ -179,7 +179,7 @@ class MultiStrategyLogger:
     
     def __init__(self):
         date_str = datetime.now().strftime('%Y%m%d')
-        base_path = "D:\\StockMarket\\StockMarket\\scripts\\claude\\expriment3"
+        base_path = "D:\\StockMarket\\StockMarket\\scripts\\claude"
         
         self.summary_file = f"{base_path}\\claude_summary\\Strategy_Comparison_{date_str}.csv"
         os.makedirs(os.path.dirname(self.summary_file), exist_ok=True)

@@ -15,7 +15,7 @@ from claude_groww_logger import GrowwLogger
 
 
 class NiftyScalpingBot:
-    def __init__(self, api_key, api_secret, expiry_date, future_expiry_date, capital=10000):
+    def __init__(self, api_key, api_secret, expiry_date, capital=10000):
         print("\n" + "="*60)
         print("🚀 NIFTY OPTIONS SCALPING BOT v2.2 (ALL FIXES)")
         print("="*60)
@@ -49,17 +49,17 @@ class NiftyScalpingBot:
         self.early_trading_active = False
         
         # Strategy Parameters
-        self.target_points = 10
-        self.stop_loss_points = 5
-        self.trailing_stop_activation = 0.4 # Activate after 50% of target
-        self.trailing_stop_distance = 0.035   # Trail 3.5% below peak
+        self.target_points = 20
+        self.stop_loss_points = 10
+        self.trailing_stop_activation = 0.5  # Activate after 50% of target
+        self.trailing_stop_distance = 0.15   # Trail 15% below peak
         
         # Initialize Data Engine
-        fut_symbol = f"NSE-NIFTY-{self._format_expiry_symbol(future_expiry_date)}-FUT"
+        fut_symbol = f"NSE-NIFTY-{self._format_expiry_symbol(expiry_date)}-FUT"
         self.engine = GrowwDataEngine(api_key, api_secret, expiry_date, fut_symbol)
         
         # Optional: Disable Debug Mode for Production
-        # self.engine.disable_debug()
+        self.engine.disable_debug()
         
         # Initialize Logger
         self.logger = GrowwLogger()
@@ -68,8 +68,8 @@ class NiftyScalpingBot:
         self._connect()
         
         print(f"\n✅ Bot Initialized")
-        print(f"💰 Capital: Rs.{self.capital:,.2f}")
-        print(f"🛡️  Max Daily Loss: Rs.{self.daily_loss_limit:,.2f}")
+        print(f"💰 Capital: Rs. {self.capital:,.2f}")
+        print(f"🛡️  Max Daily Loss: Rs. {self.daily_loss_limit:,.2f}")
         print(f"📊 Expiry: {expiry_date}")
         print(f"⚡ Early Trading: Enabled (starts at 9:17 AM)")
         print("="*60 + "\n")
@@ -97,7 +97,7 @@ class NiftyScalpingBot:
     def check_risk_limits(self):
         """Check daily loss limit"""
         if abs(self.daily_pnl) >= self.daily_loss_limit:
-            print(f"\n🛑 DAILY LOSS LIMIT HIT: Rs.{self.daily_pnl:.2f}")
+            print(f"\n🛑 DAILY LOSS LIMIT HIT: Rs. {self.daily_pnl:.2f}")
             print("Bot shutting down for the day...")
             return False
         return True
@@ -110,12 +110,11 @@ class NiftyScalpingBot:
         """
         
         spot = self.engine.spot_ltp
-        future_price = self.engine.fut_ltp
         vwap = self.engine.vwap
         pcr = self.engine.pcr
         
         # Check VWAP readiness
-        if vwap == 0 or spot == 0 or future_price == 0:
+        if vwap == 0 or spot == 0:
             return 'NEUTRAL'
         
         # Check if RSI ready
@@ -134,19 +133,19 @@ class NiftyScalpingBot:
             bullish_signals = 0
             bearish_signals = 0
             
-            # 1.VWAP (Primary)
-            if future_price > vwap:
+            # 1. VWAP (Primary)
+            if spot > vwap:
                 bullish_signals += 2
-            elif future_price < vwap:
+            elif spot < vwap:
                 bearish_signals += 2
             
-            # 2.PCR (Sentiment)
+            # 2. PCR (Sentiment)
             if pcr > 1.1:
                 bullish_signals += 1
             elif pcr < 0.9:
                 bearish_signals += 1
             
-            # 3.Momentum
+            # 3. Momentum
             changes = self.engine.get_changes()
             if changes['spot_change'] > 15:
                 bullish_signals += 1
@@ -177,25 +176,25 @@ class NiftyScalpingBot:
             bullish_signals = 0
             bearish_signals = 0
             
-            # 1.VWAP
-            if future_price > vwap:
+            # 1. VWAP
+            if spot > vwap:
                 bullish_signals += 2
-            elif future_price < vwap:
+            elif spot < vwap:
                 bearish_signals += 2
             
-            # 2.EMA
+            # 2. EMA
             if ema5 > ema13 and spot > ema5:
                 bullish_signals += 1
             elif ema5 < ema13 and spot < ema5:
                 bearish_signals += 1
             
-            # 3.RSI
+            # 3. RSI
             if rsi > 60:
                 bullish_signals += 1
             elif rsi < 40:
                 bearish_signals += 1
             
-            # 4.PCR
+            # 4. PCR
             if pcr > 1.1:
                 bullish_signals += 1
             elif pcr < 0.9:
@@ -215,44 +214,43 @@ class NiftyScalpingBot:
         # Cooldown check ✅
         if self.last_exit_time: 
             elapsed = (datetime.now() - self.last_exit_time).seconds
-            if elapsed < self.cooldown_seconds: 
+            if elapsed < self. cooldown_seconds: 
                 return None  # Still in cooldown
         
         if market_bias == 'NEUTRAL': 
             return None
         
-        spot = self.engine.spot_ltp
-        future_price = self.engine.fut_ltp
+        spot = self.engine. spot_ltp
         vwap = self.engine.vwap
         
         # Check if RSI ready
-        rsi_ready = self.engine.rsi_warmup_complete and self.engine.candles_processed >= 15
+        rsi_ready = self.engine. rsi_warmup_complete and self. engine.candles_processed >= 15
         
         # --- EARLY MODE:  Relaxed entry ---
-        if not rsi_ready and self.early_trading_mode:
+        if not rsi_ready and self. early_trading_mode:
             
             if market_bias == 'BULLISH':
-                if future_price <= vwap: 
+                if spot <= vwap: 
                     return None
                 
-                changes = self.engine.get_changes()
+                changes = self.engine. get_changes()
                 if changes['spot_change'] < -5:
                     return None
                 
-                if self.engine.atm_ce['oi'] == 0:
+                if self.engine. atm_ce['oi'] == 0:
                     return None
                 
                 return 'BUY_CE'
             
             elif market_bias == 'BEARISH': 
-                if future_price >= vwap:
+                if spot >= vwap:
                     return None
                 
-                changes = self.engine.get_changes()
+                changes = self. engine.get_changes()
                 if changes['spot_change'] > 5:
                     return None
                 
-                if self.engine.atm_pe['oi'] == 0:
+                if self. engine.atm_pe['oi'] == 0:
                     return None
                 
                 return 'BUY_PE'
@@ -262,7 +260,7 @@ class NiftyScalpingBot:
             rsi = self.engine.rsi
             
             if market_bias == 'BULLISH': 
-                if future_price <= vwap: 
+                if spot <= vwap: 
                     return None
                 
                 # ✅ Accept RSI 55-75 for bullish (reject outside this range)
@@ -275,119 +273,42 @@ class NiftyScalpingBot:
                 return 'BUY_CE'
             
             elif market_bias == 'BEARISH': 
-                if future_price >= vwap: 
+                if spot >= vwap: 
                     return None
                 
                 # ✅ FIXED: Accept RSI 25-45 for bearish (reject outside this range)
                 if rsi < 25 or rsi > 45:
                     return None
                 
-                if self.engine.atm_pe['oi'] == 0:
+                if self. engine.atm_pe['oi'] == 0:
                     return None
                 
                 return 'BUY_PE'
         
         return None
     
-    def get_symbol_for_strike(self, strike, option_type):
-        """Helper to construct symbol for any strike"""
-        dt = datetime.strptime(self.engine.expiry_date, "%Y-%m-%d")
-        year = dt.strftime("%y")
-        month = dt.strftime("%b").upper()
-        return f"NIFTY{year}{month}{int(strike)}{option_type}"
-
-    def get_price_for_symbol(self, symbol):
-        """Fetch live price for any symbol directly from API"""
-        try:
-            key = f"NSE_{symbol}"
-            ltp_response = self.engine.groww.get_ltp(
-                segment="FNO",
-                exchange_trading_symbols=key
-            )
-            if ltp_response and key in ltp_response:
-                return ltp_response[key]
-        except Exception:
-            pass
-        return 0
-
     def place_order(self, signal):
         """Execute order - PAPER TRADING with strike tracking"""
         try:
-            # 1.Identify Target
             if signal == 'BUY_CE':
-                base_atm = self.engine.atm_ce
+                symbol = self.engine.atm_ce['symbol']
+                entry_price = self.engine.atm_ce['ltp']
+                strike = self.engine.atm_ce['strike']
                 option_type = 'CE'
-                # Priority: ITM -> ATM -> OTM (Maximize Delta if affordable)
-                offsets = [-50, 0, 50, 100, 150]
             else:
-                base_atm = self.engine.atm_pe
+                symbol = self.engine.atm_pe['symbol']
+                entry_price = self.engine.atm_pe['ltp']
+                strike = self.engine.atm_pe['strike']
                 option_type = 'PE'
-                # Priority: ITM -> ATM -> OTM
-                offsets = [50, 0, -50, -100, -150]
             
-            atm_strike = base_atm['strike']
-            max_budget = self.capital * 0.90
-            
-            selected_strike = None
-            selected_price = 0
-            selected_symbol = ""
-            
-            print(f"\n🔍 SEARCHING FOR AFFORDABLE STRIKE (Max Budget: Rs.{max_budget:.0f})")
-            
-            # 2.Strike Selection Loop
-            # 2. Strike Selection Loop
-            for offset in offsets:
-                test_strike = atm_strike + offset
-                
-                # --- FIX: LOOKUP SYMBOL INSTEAD OF GUESSING ---
-                strike_node = self.engine.get_strike_data(test_strike)
-                
-                price = 0
-                symbol = ""
-                
-                if strike_node:
-                    # 'CE' or 'PE' matches option_type
-                    if option_type in strike_node:
-                        opt_data = strike_node[option_type]
-                        price = opt_data['ltp']
-                        symbol = opt_data['trading_symbol']
-                
-                # Fallback: If offset is 0 (ATM), we can trust the engine's main ATM variable
-                if offset == 0 and price == 0:
-                    if option_type == 'CE':
-                        price = base_atm['ltp']
-                        symbol = base_atm['symbol']
-                    else:
-                        price = base_atm['ltp']
-                        symbol = base_atm['symbol']
-                # -----------------------------------------------
-
-                if price <= 0: 
-                    # Optional: Print that we skipped it so logs aren't silent
-                    # print(f"   Skipping {test_strike} (No Price)") 
-                    continue
-                
-                total_cost = price * self.lot_size
-                print(f"   Checking {test_strike} {option_type} @ {price} = Rs. {total_cost:.0f}...", end="")
-                
-                if total_cost <= max_budget:
-                    print(" ✅ AFFORDABLE")
-                    selected_strike = test_strike
-                    selected_price = price
-                    selected_symbol = symbol
-                    break
-                else:
-                    print(" ❌ TOO EXPENSIVE")
-            
-            if not selected_strike:
-                print("⚠️  No affordable strikes found within search range.Skipping trade.")
+            # Affordability check
+            total_cost = entry_price * self.lot_size
+            if total_cost > self.capital * 0.7:
+                print(f"⚠️  Premium too high: Rs. {entry_price} x {self.lot_size} = Rs. {total_cost}")
                 return False
             
             # CRITICAL: Store entry strike
-            self.entry_strike = selected_strike
-            entry_price = selected_price
-            symbol = selected_symbol
-            strike = selected_strike
+            self.entry_strike = strike
             
             print(f"\n{'='*60}")
             print(f"📝 PAPER TRADE - NO REAL ORDER")
@@ -413,8 +334,8 @@ class NiftyScalpingBot:
             
             print(f"🟢 POSITION OPENED: {option_type} @ Strike {strike} ({mode} MODE)")
             print(f"Symbol: {symbol}")
-            print(f"Entry: Rs.{entry_price} | Target: Rs.{self.active_position['target']:.2f}")
-            print(f"Stop Loss: Rs.{self.active_position['stop_loss']:.2f}")
+            print(f"Entry: Rs. {entry_price} | Target: Rs. {self.active_position['target']:.2f}")
+            print(f"Stop Loss: Rs. {self.active_position['stop_loss']:.2f}")
             
             if mode == "FULL":
                 print(f"RSI: {self.engine.rsi:.1f} | Spot: {self.engine.spot_ltp:.2f} | VWAP: {self.engine.vwap:.2f}")
@@ -432,46 +353,52 @@ class NiftyScalpingBot:
     def get_current_option_price(self):
         """
         Get current price for the SAME strike we entered
+        Symbol format: NIFTY25DEC26000CE (Year + Month + Strike + Type)
         """
         if not self.active_position or not self.entry_strike:
             return 0
         
         option_type = self.active_position['type']
+        entry_strike = self.entry_strike
+        current_atm = self.engine.atm_strike
         
-        # USE THE STORED SYMBOL DIRECTLY (More reliable than rebuilding it)
-        symbol = self.active_position['symbol']
-        
-        try:
-            # Fetch price using get_ltp
-            # Note: Ensure symbol format matches what API expects (NSE_...)
-            key = f"NSE_{symbol}"
-            
-            # If we already have the LTP in the engine's current ATM data, use it (Fastest)
-            if option_type == 'CE' and self.engine.atm_ce['symbol'] == symbol:
+        # CASE 1: Entry strike is still ATM (use cached - fastest)
+        if entry_strike == current_atm:
+            if option_type == 'CE':
                 return self.engine.atm_ce['ltp']
-            if option_type == 'PE' and self.engine.atm_pe['symbol'] == symbol:
+            else: 
                 return self.engine.atm_pe['ltp']
-
-            # Otherwise, fetch specific symbol
+        
+        # CASE 2: ATM moved, fetch our entry strike via API
+        try: 
+            # Build symbol:  NIFTY25DEC26000CE
+            dt = datetime.strptime(self.engine.expiry_date, "%Y-%m-%d")
+            year = dt.strftime("%y")           # "25"
+            month = dt.strftime("%b").upper()  # "DEC"
+            symbol = f"NIFTY{year}{month}{int(entry_strike)}{option_type}"
+            
+            # Fetch price using get_ltp (fastest)
             ltp_response = self.engine.groww.get_ltp(
                 segment="FNO",
-                exchange_trading_symbols=key
+                exchange_trading_symbols=f"NSE_{symbol}"
             )
             
+            key = f"NSE_{symbol}"
             if ltp_response and key in ltp_response:
                 price = ltp_response[key]
                 if price > 0:
                     return price
             
-            # --- FIX STARTS HERE ---
-            # If fetch fails, DO NOT return ATM. Return last known peak to prevent panic exit.
-            print(f"⚠️ Could not fetch price for {symbol}. Keeping previous.")
-            return self.active_position['peak'] 
-            # --- FIX ENDS HERE ---
+            # Fallback to ATM
+            if option_type == 'CE':
+                return self.engine.atm_ce['ltp']
+            return self.engine.atm_pe['ltp']
         
         except Exception as e:
             print(f"⚠️ Price fetch error: {e}")
-            return self.active_position['peak'] # Return last valid price
+            if option_type == 'CE':
+                return self.engine.atm_ce['ltp']
+            return self.engine.atm_pe['ltp']
     
     def manage_position(self):
         """Monitor position with improved trailing stop"""
@@ -494,15 +421,15 @@ class NiftyScalpingBot:
         # Exit conditions
         exit_reason = None
         
-        # 1.Target Hit
+        # 1. Target Hit
         if current_price >= self.active_position['target']:
             exit_reason = "TARGET"
         
-        # 2.Stop Loss Hit
+        # 2. Stop Loss Hit
         elif current_price <= self.active_position['stop_loss']:
             exit_reason = "STOP_LOSS"
         
-        # 3.Improved Trailing Stop
+        # 3. Improved Trailing Stop
         else:
             entry_price = self.active_position['entry_price']
             peak_price = self.active_position['peak']
@@ -516,7 +443,7 @@ class NiftyScalpingBot:
             if profit_pct >= (target_profit_pct * self.trailing_stop_activation):
                 if not self.active_position['trailing_activated']:
                     self.active_position['trailing_activated'] = True
-                    print(f"\n✅ Trailing Stop Activated! Peak: Rs.{peak_price:.2f}")
+                    print(f"\n✅ Trailing Stop Activated! Peak: Rs. {peak_price:.2f}")
                 
                 # Trail 15% below peak
                 trailing_stop = peak_price * (1 - self.trailing_stop_distance)
@@ -524,7 +451,7 @@ class NiftyScalpingBot:
                 if current_price <= trailing_stop:
                     exit_reason = "TRAILING_STOP"
         
-        # 4.Time-based exit (30 minutes max)
+        # 4. Time-based exit (30 minutes max)
         hold_time = (datetime.now() - self.active_position['entry_time']).seconds / 60
         if hold_time > 30:
             exit_reason = "TIME_EXIT"
@@ -591,7 +518,7 @@ class NiftyScalpingBot:
                 
                 if not (market_start <= now <= market_end):
                     if iteration % 12 == 0:
-                        print(f"⏸️  Market closed. Time:  {now.strftime('%H:%M:%S')}")
+                        print(f"⏸️  Market closed.  Time:  {now.strftime('%H:%M:%S')}")
                     time.sleep(5)
                     continue
 
@@ -606,26 +533,26 @@ class NiftyScalpingBot:
                     print("\n⏰ 15:25 - FORCE EXIT (End of Day)")
                     current_price = self.get_current_option_price()
                     pnl = (current_price - self.active_position['entry_price']) * self.lot_size
-                    self.exit_position(current_price, pnl, "EOD_EXIT")
+                    self. exit_position(current_price, pnl, "EOD_EXIT")
                     continue
 
                 # No new entries after 15:20
                 if now >= no_new_entry_time and not self.active_position:
                     if iteration % 12 == 0:
-                        print(f"⏸️  No new entries after 15:20.Time:  {now.strftime('%H:%M:%S')}")
+                        print(f"⏸️  No new entries after 15:20. Time:  {now. strftime('%H:%M:%S')}")
                     time.sleep(5)
                     continue
                 
                 # Update market data
                 self.engine.update()
                 
-                # Add this after engine.update() in run() to see health: 
+                # Add this after engine. update() in run() to see health: 
                 print(f"\n{self.engine.get_health_status()}")
                 
                 # Health check
                 health = self.engine.get_health_status()
                 if health['data_quality'] == 'POOR' and iteration > 10:
-                    print(f"\n⚠️  Poor data quality.Waiting...")
+                    print(f"\n⚠️  Poor data quality. Waiting...")
                     time.sleep(10)
                     continue
                 
@@ -664,7 +591,7 @@ class NiftyScalpingBot:
                             self.engine,
                             f"IN_POSITION_{self.active_position['type']}@{self.entry_strike}",
                             unrealized_pnl,
-                            f"Monitoring @ Rs.{current_price:.2f}"
+                            f"Monitoring @ Rs. {current_price:.2f}"
                         )
                 
                 # Wait before next iteration
@@ -699,9 +626,8 @@ if __name__ == "__main__":
     # Configuration
     API_KEY = "eyJraWQiOiJaTUtjVXciLCJhbGciOiJFUzI1NiJ9.eyJleHAiOjI1NTQ1MzcwMzEsImlhdCI6MTc2NjEzNzAzMSwibmJmIjoxNzY2MTM3MDMxLCJzdWIiOiJ7XCJ0b2tlblJlZklkXCI6XCJkYjY5YTI4MS04YzVkLTRhZDMtYTYwMy1iMWRkZjlmMjBkZGZcIixcInZlbmRvckludGVncmF0aW9uS2V5XCI6XCJlMzFmZjIzYjA4NmI0MDZjODg3NGIyZjZkODQ5NTMxM1wiLFwidXNlckFjY291bnRJZFwiOlwiMDdmMDA0MGMtZTk4Zi00ZDNmLTk5Y2EtZDc1ZjBlYWU5M2NlXCIsXCJkZXZpY2VJZFwiOlwiZDMyMWIxMzUtZWQ5Mi01ZWJkLWJjMDUtZTY1NDY2OWRiMDM5XCIsXCJzZXNzaW9uSWRcIjpcIjJmZmJiNTM1LWRkODQtNDVhZS1hMjkwLWUyZWFmMGQ3NGZlMFwiLFwiYWRkaXRpb25hbERhdGFcIjpcIno1NC9NZzltdjE2WXdmb0gvS0EwYk1yOE5XVzhzdTNvZ080am1ZUzIwZEpSTkczdTlLa2pWZDNoWjU1ZStNZERhWXBOVi9UOUxIRmtQejFFQisybTdRPT1cIixcInJvbGVcIjpcImF1dGgtdG90cFwiLFwic291cmNlSXBBZGRyZXNzXCI6XCIyNDA5OjQwOTA6MTA4ZjpkYzA1OmQwYjg6ZWQ2ZTozOTc0OmJmMTUsMTYyLjE1OC41MS4xNzUsMzUuMjQxLjIzLjEyM1wiLFwidHdvRmFFeHBpcnlUc1wiOjI1NTQ1MzcwMzEzODJ9IiwiaXNzIjoiYXBleC1hdXRoLXByb2QtYXBwIn0.C_j_AbvZPNY1wb7hjEMGGO9CP0xhen40jwWMRLPKh73dd6T8sQKn32HmTkpAQtUzdEm2YCxPaJdy3aW_ojvo7A"
     API_SECRET = "cE#YaAvu27#kS)axpmB1p#4kKlvv7%ef"
-    EXPIRY_DATE = "2026-01-06"  # Next weekly expiry (YYYY-MM-DD)
-    future_expiry_date = "2026-01-27"  # Using same expiry for futures
-    CAPITAL = 20000
+    EXPIRY_DATE = "2025-12-30"  # Next weekly expiry (YYYY-MM-DD)
+    CAPITAL = 10000
     
     print("\n⚠️  PAPER TRADING MODE - No real orders will be placed!")
     print("This is for testing and development only.\n")
@@ -711,7 +637,6 @@ if __name__ == "__main__":
         api_key=API_KEY,
         api_secret=API_SECRET,
         expiry_date=EXPIRY_DATE,
-        future_expiry_date=future_expiry_date,
         capital=CAPITAL
     )
     

@@ -371,7 +371,7 @@ class GrowwDataEngine:
             return float(df['c'].mean()) if len(df) > 0 else 0.0
     
     def _fetch_chain(self):
-        """Fetch option chain and SAVE IT for symbol lookup"""
+        """Fetch option chain with all Greeks"""
         try: 
             chain = self.groww.get_option_chain("NSE", "NIFTY", self.expiry_date)
             
@@ -381,15 +381,12 @@ class GrowwDataEngine:
             
             self.last_chain_update = datetime.now()
             
-            # [CRITICAL ADDITION] Save the raw chain data for symbol lookup
-            self.chain_data = chain['strikes'] 
-            
             ce_oi_total = 0
             pe_oi_total = 0
             
-            # Reset ATM containers
+            # Reset ATM
             self.atm_ce = {
-                'symbol': '', 'strike': 0, 'ltp': 0, 'oi': 0,
+                'symbol':  '', 'strike':  0, 'ltp': 0, 'oi': 0,
                 'delta': 0, 'theta': 0, 'gamma': 0, 'vega': 0, 'iv': 0
             }
             self.atm_pe = {
@@ -414,13 +411,13 @@ class GrowwDataEngine:
                         self.atm_ce = {
                             'symbol': ce_node.get('trading_symbol', ''),
                             'strike': int(strike),
-                            'ltp': ce_node.get('ltp', 0),
+                            'ltp':  ce_node.get('ltp', 0),
                             'oi': ce_node.get('open_interest', 0),
                             'delta': greeks.get('delta', 0),
                             'gamma': greeks.get('gamma', 0),
                             'theta': greeks.get('theta', 0),
                             'vega': greeks.get('vega', 0),
-                            'iv': greeks.get('iv', 0)
+                            'iv':  greeks.get('iv', 0)
                         }
                     
                     if pe_node:
@@ -428,11 +425,11 @@ class GrowwDataEngine:
                         self.atm_pe = {
                             'symbol': pe_node.get('trading_symbol', ''),
                             'strike': int(strike),
-                            'ltp': pe_node.get('ltp', 0),
+                            'ltp':  pe_node.get('ltp', 0),
                             'oi': pe_node.get('open_interest', 0),
                             'delta': greeks.get('delta', 0),
                             'gamma': greeks.get('gamma', 0),
-                            'theta': greeks.get('theta', 0),
+                            'theta':  greeks.get('theta', 0),
                             'vega': greeks.get('vega', 0),
                             'iv': greeks.get('iv', 0)
                         }
@@ -448,22 +445,6 @@ class GrowwDataEngine:
             self.errors['chain'] += 1
             if self.errors['chain'] % 10 == 1:
                 print(f"\n⚠️ Chain Error #{self.errors['chain']}: {e}")
-
-    # [ADD THIS NEW HELPER METHOD TO THE CLASS]
-    def get_strike_data(self, strike):
-        """Helper to get full data for a specific strike from cache"""
-        if hasattr(self, 'chain_data') and self.chain_data:
-            # Groww returns keys as strings (e.g., "25000.00")
-            # Try exact match first, then formatted string
-            str_strike = str(float(strike))
-            # Also try integer string for robustness
-            int_strike = str(int(strike))
-            
-            if str_strike in self.chain_data:
-                return self.chain_data[str_strike]
-            elif int_strike in self.chain_data:
-                return self.chain_data[int_strike]
-        return None
     
     def _save_snapshot(self):
         """Save current state to CSV"""
@@ -588,16 +569,6 @@ class GrowwDataEngine:
         """Disable debug mode"""
         self.debug_mode = False
         print("🔍 Debug mode DISABLED")
-        
-    def get_strike_data(self, strike):
-        """Helper to get full data for a specific strike from cache"""
-        if hasattr(self, 'chain_data') and self.chain_data:
-            # Groww returns keys as strings (e.g., "25000.00")
-            # Try exact match first, then formatted string
-            str_strike = str(float(strike))
-            if str_strike in self.chain_data:
-                return self.chain_data[str_strike]
-        return None
 
 
 # ============================================================
@@ -609,13 +580,13 @@ if __name__ == "__main__":
     
     API_KEY = "eyJraWQiOiJaTUtjVXciLCJhbGciOiJFUzI1NiJ9.eyJleHAiOjI1NTQ1MzcwMzEsImlhdCI6MTc2NjEzNzAzMSwibmJmIjoxNzY2MTM3MDMxLCJzdWIiOiJ7XCJ0b2tlblJlZklkXCI6XCJkYjY5YTI4MS04YzVkLTRhZDMtYTYwMy1iMWRkZjlmMjBkZGZcIixcInZlbmRvckludGVncmF0aW9uS2V5XCI6XCJlMzFmZjIzYjA4NmI0MDZjODg3NGIyZjZkODQ5NTMxM1wiLFwidXNlckFjY291bnRJZFwiOlwiMDdmMDA0MGMtZTk4Zi00ZDNmLTk5Y2EtZDc1ZjBlYWU5M2NlXCIsXCJkZXZpY2VJZFwiOlwiZDMyMWIxMzUtZWQ5Mi01ZWJkLWJjMDUtZTY1NDY2OWRiMDM5XCIsXCJzZXNzaW9uSWRcIjpcIjJmZmJiNTM1LWRkODQtNDVhZS1hMjkwLWUyZWFmMGQ3NGZlMFwiLFwiYWRkaXRpb25hbERhdGFcIjpcIno1NC9NZzltdjE2WXdmb0gvS0EwYk1yOE5XVzhzdTNvZ080am1ZUzIwZEpSTkczdTlLa2pWZDNoWjU1ZStNZERhWXBOVi9UOUxIRmtQejFFQisybTdRPT1cIixcInJvbGVcIjpcImF1dGgtdG90cFwiLFwic291cmNlSXBBZGRyZXNzXCI6XCIyNDA5OjQwOTA6MTA4ZjpkYzA1OmQwYjg6ZWQ2ZTozOTc0OmJmMTUsMTYyLjE1OC41MS4xNzUsMzUuMjQxLjIzLjEyM1wiLFwidHdvRmFFeHBpcnlUc1wiOjI1NTQ1MzcwMzEzODJ9IiwiaXNzIjoiYXBleC1hdXRoLXByb2QtYXBwIn0.C_j_AbvZPNY1wb7hjEMGGO9CP0xhen40jwWMRLPKh73dd6T8sQKn32HmTkpAQtUzdEm2YCxPaJdy3aW_ojvo7A"
     API_SECRET = "cE#YaAvu27#kS)axpmB1p#4kKlvv7%ef"
-    EXPIRY_DATE = "2026-01-06"
-    FUT_SYMBOL = "NSE-NIFTY-27Jan26-FUT"
+    EXPIRY_DATE = "2025-12-30"
+    FUT_SYMBOL = "NSE-NIFTY-30Dec25-FUT"
     
     print("🧪 Testing Data Pipeline.. .\n")
     
     engine = GrowwDataEngine(API_KEY, API_SECRET, EXPIRY_DATE, FUT_SYMBOL)
-    # engine.enable_debug()  # Show RSI/VWAP calculations
+    engine.enable_debug()  # Show RSI/VWAP calculations
     
     # Run 5 updates
     for i in range(5):

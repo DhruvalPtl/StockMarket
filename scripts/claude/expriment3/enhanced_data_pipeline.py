@@ -16,17 +16,8 @@ import time as time_module
 
 
 class GrowwDataEngine:
-    def __init__(self, api_key, api_secret, expiry_date, fut_symbol, timeframe="1minute"):
-        timeframe_map = {
-            "1minute": "1min",
-            "2minute": "2min", 
-            "3minute": "3min",
-            "5minute": "5min"
-        }
-        self.timeframe = timeframe
-        self.timeframe_display = timeframe_map.get(timeframe, timeframe)
-        
-        print(f"\n⚙️ STARTING ENGINE v3.0 [{self.timeframe_display}] | Expiry: {expiry_date} | Future: {fut_symbol}")
+    def __init__(self, api_key, api_secret, expiry_date, fut_symbol):
+        print(f"\n⚙️ STARTING ENGINE v3.0 | Expiry: {expiry_date} | Future: {fut_symbol}")
         
         self.api_key = api_key
         self.api_secret = api_secret
@@ -72,9 +63,6 @@ class GrowwDataEngine:
             'delta': 0, 'theta': 0, 'gamma': 0, 'vega': 0, 'iv': 0
         }
         
-        # NEW: Multiple strikes storage (ATM ± 2 strikes)
-        self.strikes_data = {}  # Format: {23500: {'CE': {...}, 'PE': {...}}, ...}
-        
         # Total OI
         self.total_ce_oi = 0
         self.total_pe_oi = 0
@@ -91,7 +79,7 @@ class GrowwDataEngine:
         
         # Warmup tracking
         self.rsi_warmup_complete = False
-        self.rsi_periods_needed = 14
+        self.rsi_periods_needed = 15
         self.candles_processed = 0
         
         # Tracking & debug
@@ -105,6 +93,7 @@ class GrowwDataEngine:
         self.debug_mode = False
         
         # CSV logging
+        self.log_file = f"D:\\StockMarket\\StockMarket\\scripts\\claude\\claude_engine_log\\Engine_Log_{datetime.now().strftime('%Y%m%d_%H%M%S')}.csv"
         self._init_csv()
         
         # Connect
@@ -123,7 +112,7 @@ class GrowwDataEngine:
             sys.exit()
     
     def _init_csv(self):
-        """Create master CSV file with timeframe in filename"""
+        """Create master CSV file"""
         cols = [
             "Timestamp", "Spot_LTP", "Fut_LTP", "Fut_Open", "Fut_High", "Fut_Low",
             "RSI", "RSI_Ready", "VWAP", "EMA5", "EMA13",
@@ -134,15 +123,10 @@ class GrowwDataEngine:
             "PE_Symbol", "PE_Strike", "PE_LTP", "PE_OI", "PE_Delta", "PE_Gamma",
             "PE_Theta", "PE_Vega", "PE_IV"
         ]
-        
-        # CHANGED: Add timeframe to log filename
-        timestamp = datetime.now().strftime('%Y%m%d_%H%M%S')
-        self.log_file = f"D:\\StockMarket\\StockMarket\\scripts\\claude\\expriment3\\claude_engine_log\\Engine_Log_{self.timeframe_display}_{timestamp}.csv"
-        
         os.makedirs(os.path.dirname(self.log_file), exist_ok=True)
         with open(self.log_file, 'w') as f:
             f.write(",".join(cols) + "\n")
-        print(f"📝 [{self.timeframe_display}] Logging to: {self.log_file}")
+        print(f"📝 Logging Data to: {self.log_file}")
     
     def _rate_limit(self, api_type):
         """Rate limiting - prevent API throttling"""
@@ -203,7 +187,7 @@ class GrowwDataEngine:
                 "NSE", "CASH", "NSE-NIFTY",
                 today_open.strftime("%Y-%m-%d %H:%M:%S"),
                 end.strftime("%Y-%m-%d %H:%M:%S"),
-                self.timeframe
+                "1minute"
             )
             
             if not resp or 'candles' not in resp:
@@ -286,7 +270,7 @@ class GrowwDataEngine:
             print(f"\n⚠️ RSI Calculation Error: {e}")
             return 50.0
     
-    def _fetch_future(self):    
+    def _fetch_future(self):
         """Fetch futures data for VWAP and candle patterns"""
         try:
             end = datetime.now()
@@ -296,7 +280,7 @@ class GrowwDataEngine:
                 "NSE", "FNO", self.fut_symbol,
                 today_open.strftime("%Y-%m-%d %H:%M:%S"),
                 end.strftime("%Y-%m-%d %H:%M:%S"),
-                self.timeframe
+                "1minute"
             )
             
             if not resp or 'candles' not in resp:
@@ -335,7 +319,6 @@ class GrowwDataEngine:
         """Calculate VWAP (Volume Weighted Average Price)"""
         try:
             if 'v' not in df.columns:
-                print("⚠️  VWAP warning: Volume column missing, using mean price fallback")
                 return float(df['c'].mean())
             
             total_volume = df['v'].sum()
@@ -364,13 +347,8 @@ class GrowwDataEngine:
             print(f"\n⚠️ VWAP Calculation Error: {e}")
             return float(df['c'].mean()) if len(df) > 0 else 0.0
     
-    """
-    ENHANCED: _fetch_chain() with better error handling
-    Location: enhanced_data_pipeline.py (replace existing method)
-    """
-
     def _fetch_chain(self):
-        """Fetch option chain with all Greeks - stores ATM ± 2 strikes"""
+        """Fetch option chain with all Greeks"""
         try:
             chain = self.groww.get_option_chain("NSE", "NIFTY", self.expiry_date)
             
@@ -393,21 +371,6 @@ class GrowwDataEngine:
                 'delta': 0, 'theta': 0, 'gamma': 0, 'vega': 0, 'iv': 0
             }
             
-            # Clear strikes data
-            self.strikes_data = {}
-            
-            # Define strikes to store (ATM ± 2 strikes)
-            strikes_to_store = [
-                self.atm_strike,       # ATM
-                self.atm_strike + 50,  # OTM+1 for CE, ITM-1 for PE
-                self.atm_strike + 100, # OTM+2 for CE, ITM-2 for PE
-                self.atm_strike - 50,  # ITM-1 for CE, OTM+1 for PE
-                self.atm_strike - 100  # ITM-2 for CE, OTM+2 for PE
-            ]
-            
-            # ✅ ENHANCEMENT: Track which strikes were successfully loaded
-            loaded_strikes = []
-            
             for strike_str, data in chain['strikes'].items():
                 strike = float(strike_str)
                 
@@ -418,49 +381,9 @@ class GrowwDataEngine:
                 ce_oi_total += ce_node.get('open_interest', 0)
                 pe_oi_total += pe_node.get('open_interest', 0)
                 
-                # Store strikes data (ATM ± 2 strikes)
-                if strike in strikes_to_store:
-                    # ✅ FIX: Initialize strike dict even if CE/PE missing
-                    if strike not in self.strikes_data:
-                        self.strikes_data[int(strike)] = {}
-                    
-                    # ✅ FIX: Store CE only if valid data exists
-                    if ce_node and ce_node.get('ltp', 0) > 0:
-                        greeks = ce_node.get('greeks', {})
-                        self.strikes_data[int(strike)]['CE'] = {
-                            'symbol': ce_node.get('trading_symbol', ''),
-                            'strike': int(strike),
-                            'ltp': ce_node.get('ltp', 0),
-                            'oi': ce_node.get('open_interest', 0),
-                            'delta': greeks.get('delta', 0),
-                            'gamma': greeks.get('gamma', 0),
-                            'theta': greeks.get('theta', 0),
-                            'vega': greeks.get('vega', 0),
-                            'iv': greeks.get('iv', 0)
-                        }
-                        if int(strike) not in loaded_strikes:
-                            loaded_strikes.append(int(strike))
-                    
-                    # ✅ FIX: Store PE only if valid data exists
-                    if pe_node and pe_node.get('ltp', 0) > 0:
-                        greeks = pe_node.get('greeks', {})
-                        self.strikes_data[int(strike)]['PE'] = {
-                            'symbol': pe_node.get('trading_symbol', ''),
-                            'strike': int(strike),
-                            'ltp': pe_node.get('ltp', 0),
-                            'oi': pe_node.get('open_interest', 0),
-                            'delta': greeks.get('delta', 0),
-                            'gamma': greeks.get('gamma', 0),
-                            'theta': greeks.get('theta', 0),
-                            'vega': greeks.get('vega', 0),
-                            'iv': greeks.get('iv', 0)
-                        }
-                        if int(strike) not in loaded_strikes:
-                            loaded_strikes.append(int(strike))
-                
-                # Extract ATM (for backward compatibility)
+                # Extract ATM
                 if strike == self.atm_strike:
-                    if ce_node and ce_node.get('ltp', 0) > 0:
+                    if ce_node:
                         greeks = ce_node.get('greeks', {})
                         self.atm_ce = {
                             'symbol': ce_node.get('trading_symbol', ''),
@@ -474,7 +397,7 @@ class GrowwDataEngine:
                             'iv': greeks.get('iv', 0)
                         }
                     
-                    if pe_node and pe_node.get('ltp', 0) > 0:
+                    if pe_node:
                         greeks = pe_node.get('greeks', {})
                         self.atm_pe = {
                             'symbol': pe_node.get('trading_symbol', ''),
@@ -494,17 +417,6 @@ class GrowwDataEngine:
             
             # PCR
             self.pcr = round(pe_oi_total / ce_oi_total, 2) if ce_oi_total > 0 else 0
-            
-            # ✅ ENHANCEMENT: Log strike data coverage
-            if self.debug_mode:
-                print(f"\n📊 Chain Data Coverage:")
-                print(f"   Target strikes: {strikes_to_store}")
-                print(f"   Loaded strikes: {sorted(loaded_strikes)}")
-                for strike in strikes_to_store:
-                    if strike in self.strikes_data:
-                        has_ce = 'CE' in self.strikes_data[strike]
-                        has_pe = 'PE' in self.strikes_data[strike]
-                        print(f"   {strike}: CE={has_ce}, PE={has_pe}")
         
         except Exception as e:
             self.errors['chain'] += 1
@@ -546,9 +458,6 @@ class GrowwDataEngine:
         
         status = []
         
-        # Add timeframe indicator
-        status.append(f"[{self.timeframe_display}]")
-        
         # Warmup indicator
         if not self.rsi_warmup_complete:
             status.append(f"⏳ WARMUP ({self.candles_processed}/{self.rsi_periods_needed})")
@@ -559,12 +468,9 @@ class GrowwDataEngine:
             status.append(f"📊 Nifty: {self.spot_ltp:.2f}")
         
         if self.vwap > 0:
-            vwap_diff = self.fut_ltp - self.vwap
+            vwap_diff = self.spot_ltp - self.vwap
             vwap_signal = "🟢" if vwap_diff > 0 else "🔴"
-            status.append(
-                f"FUT_VWAP: {self.vwap:.2f} {vwap_signal}({vwap_diff:+.1f})"
-            )
-
+            status.append(f"VWAP: {self.vwap:.2f} {vwap_signal}({vwap_diff:+.1f})")
         
         if self.rsi > 0:
             if self.rsi > 60:
@@ -632,117 +538,6 @@ class GrowwDataEngine:
             ) else 'POOR'
         }
     
-    """
-    FIXED: get_affordable_strike() with robust fallback logic
-    Location: enhanced_data_pipeline.py (replace existing method)
-    """
-
-    def get_affordable_strike(self, option_type, max_cost):
-        """
-        Find affordable strike within 2 strikes of ATM with robust fallback
-        
-        FIXES:
-        1. ✅ Continues on zero premium instead of returning None
-        2. ✅ Falls back to live API if strikes_data incomplete
-        3. ✅ Handles missing strikes gracefully
-        4. ✅ Validates all data before using
-        
-        Args:
-            option_type: 'CE' or 'PE'
-            max_cost: Maximum affordable cost (premium × lot_size)
-        
-        Returns:
-            dict with strike data or None if none affordable
-        """
-        lot_size = 75
-        
-        # Define strike preference order
-        if option_type == 'CE':
-            # CE: Try ATM first, then move higher (OTM - cheaper)
-            strikes_to_try = [
-                self.atm_strike,       # ATM
-                self.atm_strike + 50,  # OTM+1
-                self.atm_strike + 100  # OTM+2
-            ]
-        else:  # PE
-            # PE: Try ATM first, then move lower (OTM - cheaper)
-            strikes_to_try = [
-                self.atm_strike,       # ATM
-                self.atm_strike - 50,  # OTM+1
-                self.atm_strike - 100  # OTM+2
-            ]
-        
-        # PHASE 1: Try cached strikes_data first (fast)
-        for strike in strikes_to_try:
-            # ✅ FIX: Check if strike exists AND has option_type
-            if strike in self.strikes_data and option_type in self.strikes_data[strike]:
-                option_data = self.strikes_data[strike][option_type]
-                premium = option_data['ltp']
-                
-                # ✅ FIX: Skip zero premium but CONTINUE (don't return None)
-                if premium == 0:
-                    continue
-                
-                total_cost = premium * lot_size
-                
-                if total_cost <= max_cost:
-                    # Found affordable strike in cache!
-                    if strike != self.atm_strike:
-                        print(f"\n💡 ATM expensive, using {option_type} @ {strike} (OTM) - Rs.{premium:.2f}")
-                    return option_data
-        
-        # PHASE 2: Fallback to live API call if cache failed
-        print(f"\n🔄 Cache incomplete, fetching live prices for {option_type}...")
-        
-        for strike in strikes_to_try:
-            try:
-                # Construct symbol for API call
-                symbol = f"NIFTY{self.sym_date}{strike}{option_type}"
-                search_key = f"NSE_{symbol}"
-                
-                # Get live LTP
-                ltp_response = self.groww.get_ltp(
-                    segment="FNO",
-                    exchange_trading_symbols=search_key
-                )
-                
-                if ltp_response and search_key in ltp_response:
-                    premium = ltp_response[search_key]
-                    
-                    # ✅ FIX: Skip zero/invalid premium but continue
-                    if premium <= 0:
-                        continue
-                    
-                    total_cost = premium * lot_size
-                    
-                    if total_cost <= max_cost:
-                        # Found affordable strike via API!
-                        print(f"✅ Live API: {option_type} @ {strike} - Rs.{premium:.2f} (Total: Rs.{total_cost:.2f})")
-                        
-                        # Return data in same format as cached data
-                        return {
-                            'symbol': symbol,
-                            'strike': strike,
-                            'ltp': premium,
-                            'oi': 0,  # OI not available in LTP call
-                            'delta': 0,
-                            'gamma': 0,
-                            'theta': 0,
-                            'vega': 0,
-                            'iv': 0
-                        }
-            
-            except Exception as e:
-                # Don't crash on API error, try next strike
-                print(f"⚠️ API error for {strike}: {e}")
-                continue
-        
-        # PHASE 3: No affordable strike found
-        print(f"\n❌ No affordable {option_type} found within 2 strikes of ATM")
-        print(f"   Max budget: Rs.{max_cost:.2f}")
-        print(f"   Tried strikes: {strikes_to_try}")
-        return None
-    
     def enable_debug(self):
         """Enable debug mode to see RSI/VWAP calculations"""
         self.debug_mode = True
@@ -751,4 +546,4 @@ class GrowwDataEngine:
     def disable_debug(self):
         """Disable debug mode"""
         self.debug_mode = False
-        print("🔍 Debug mode DISABLED")
+        print("🔍 Debug mode DISABLED") 

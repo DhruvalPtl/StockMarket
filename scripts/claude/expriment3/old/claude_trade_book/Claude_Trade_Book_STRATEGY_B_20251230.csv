@@ -1,2 +1,0 @@
-Entry_Time,Exit_Time,Strategy,Symbol,Type,Strike,Entry_Price,Exit_Price,Max_Price,PnL,PnL_Pct,Balance,Exit_Reason
-09:33:52,09:34:53,STRATEGY_B,NIFTY25DEC25900CE,CE,25900,33.9,45.7,45.7,885.0,34.81,10885.0,TARGET
