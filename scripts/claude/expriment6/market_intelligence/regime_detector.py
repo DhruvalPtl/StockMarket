@@ -1,13 +1,13 @@
 """
 REGIME DETECTOR
-Determines current market state:  TRENDING, RANGING, or VOLATILE. 
+Determines current market state:  TRENDING, RANGING, or VOLATILE.
 
 Uses: 
 - ADX (Average Directional Index) for trend strength
 - ATR (Average True Range) for volatility
 - Price structure (Higher Highs/Lower Lows) for trend direction
 
-This helps strategies know WHEN to trade, not just WHAT to trade. 
+This helps strategies know WHEN to trade, not just WHAT to trade.
 """
 
 import numpy as np
@@ -19,7 +19,7 @@ from datetime import datetime
 # Import from our package
 import sys
 import os
-sys.path.append(os.path. dirname(os.path.dirname(os. path.abspath(__file__))))
+sys.path.append(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
 from market_intelligence.market_context import MarketRegime
 
@@ -40,7 +40,7 @@ class RegimeState:
 
 class RegimeDetector:
     """
-    Detects market regime using ADX, ATR, and price structure. 
+    Detects market regime using ADX, ATR, and price structure.
     
     Regimes: 
     - TRENDING_UP: ADX > 25, +DI > -DI, Higher Highs
@@ -54,13 +54,13 @@ class RegimeDetector:
         
         # ADX settings
         self.adx_period = 14
-        self.adx_trending = config. Regime.ADX_TRENDING_THRESHOLD
+        self.adx_trending = config.Regime.ADX_TRENDING_THRESHOLD
         self.adx_ranging = config.Regime.ADX_RANGING_THRESHOLD
         
         # ATR settings
         self.atr_period = config.Regime.ATR_PERIOD
-        self.atr_volatile_mult = config. Regime.ATR_VOLATILE_MULTIPLIER
-        self. atr_low_mult = config. Regime.ATR_LOW_VOL_MULTIPLIER
+        self.atr_volatile_mult = config.Regime.ATR_VOLATILE_MULTIPLIER
+        self.atr_low_mult = config.Regime.ATR_LOW_VOL_MULTIPLIER
         
         # Data storage
         self.highs = deque(maxlen=100)
@@ -76,9 +76,9 @@ class RegimeDetector:
         self.atr_history = deque(maxlen=200)
         
         # Regime tracking
-        self.current_regime = MarketRegime. UNKNOWN
+        self.current_regime = MarketRegime.UNKNOWN
         self.regime_start_index = 0
-        self. candle_count = 0
+        self.candle_count = 0
         
         # Swing point tracking
         self.swing_highs = deque(maxlen=20)
@@ -89,7 +89,7 @@ class RegimeDetector:
 
     def update(self, high: float, low:  float, close: float) -> RegimeState:
         """
-        Main update method.  Call with each new candle.
+        Main update method. Call with each new candle.
         
         Args:
             high:  Candle high price
@@ -148,9 +148,9 @@ class RegimeDetector:
         # Track regime duration
         if new_regime != self.current_regime:
             self.current_regime = new_regime
-            self. regime_start_index = self.candle_count
+            self.regime_start_index = self.candle_count
         
-        regime_duration = self. candle_count - self.regime_start_index
+        regime_duration = self.candle_count - self.regime_start_index
         
         # Calculate confidence
         confidence = self._calculate_confidence(adx, atr_percentile, regime_duration)
@@ -172,7 +172,7 @@ class RegimeDetector:
         if len(self.closes) < 2:
             return high - low
         
-        prev_close = self. closes[-2]
+        prev_close = self.closes[-2]
         
         tr1 = high - low
         tr2 = abs(high - prev_close)
@@ -185,7 +185,7 @@ class RegimeDetector:
         if len(self.highs) < 2:
             return 0.0, 0.0
         
-        prev_high = self. highs[-2]
+        prev_high = self.highs[-2]
         prev_low = self.lows[-2]
         
         up_move = high - prev_high
@@ -206,7 +206,7 @@ class RegimeDetector:
             return 0.0, 0.0, 0.0
         
         # Get recent values
-        tr_list = list(self. tr_values)[-period:]
+        tr_list = list(self.tr_values)[-period:]
         plus_dm_list = list(self.plus_dm)[-period:]
         minus_dm_list = list(self.minus_dm)[-period:]
         
@@ -254,7 +254,7 @@ class RegimeDetector:
 
     def _calculate_atr(self) -> float:
         """Calculates Average True Range."""
-        if len(self. tr_values) < self.atr_period:
+        if len(self.tr_values) < self.atr_period:
             return 0.0
         
         tr_list = list(self.tr_values)[-self.atr_period:]
@@ -266,7 +266,7 @@ class RegimeDetector:
         Returns 0-100 percentile.
         """
         if len(self.atr_history) < 20:
-            return 50. 0
+            return 50.0
         
         atr_list = sorted(list(self.atr_history))
         
@@ -290,14 +290,14 @@ class RegimeDetector:
     def _update_swing_points(self):
         """
         Identifies swing highs and lows for structure analysis.
-        A swing high:  Higher than 2 candles before and after. 
+        A swing high:  Higher than 2 candles before and after.
         """
         if len(self.highs) < 5:
             return
         
         # Check for swing high (3 candles ago)
         idx = -3
-        if (self.highs[idx] > self. highs[idx-1] and 
+        if (self.highs[idx] > self.highs[idx-1] and 
             self.highs[idx] > self.highs[idx-2] and
             self.highs[idx] > self.highs[idx+1] and 
             self.highs[idx] >= self.highs[idx+2]):
@@ -305,10 +305,10 @@ class RegimeDetector:
         
         # Check for swing low
         if (self.lows[idx] < self.lows[idx-1] and 
-            self. lows[idx] < self.lows[idx-2] and
-            self. lows[idx] < self.lows[idx+1] and 
+            self.lows[idx] < self.lows[idx-2] and
+            self.lows[idx] < self.lows[idx+1] and 
             self.lows[idx] <= self.lows[idx+2]):
-            self.swing_lows. append((self.candle_count + idx, self.lows[idx]))
+            self.swing_lows.append((self.candle_count + idx, self.lows[idx]))
 
     def _detect_regime(self, adx: float, atr: float, atr_percentile: float,
                        plus_di: float, minus_di:  float) -> MarketRegime:
@@ -316,47 +316,47 @@ class RegimeDetector:
         Main regime detection logic.
         
         Priority: 
-        1. VOLATILE (overrides everything if ATR extreme)
-        2. TRENDING_UP / TRENDING_DOWN (if ADX strong)
-        3. RANGING (default)
+        1.VOLATILE (overrides everything if ATR extreme)
+        2.TRENDING_UP / TRENDING_DOWN (if ADX strong)
+        3.RANGING (default)
         """
         
-        # 1. Check for VOLATILE first
+        # 1.Check for VOLATILE first
         if atr_percentile > 90:  # Top 10% ATR
-            return MarketRegime. VOLATILE
+            return MarketRegime.VOLATILE
         
         avg_atr = np.mean(list(self.atr_history)) if self.atr_history else atr
         if avg_atr > 0 and atr > avg_atr * self.atr_volatile_mult:
             return MarketRegime.VOLATILE
         
-        # 2. Check for TRENDING
+        # 2.Check for TRENDING
         if adx >= self.adx_trending:
             # Strong trend detected
             if plus_di > minus_di:
                 # Confirm with structure
                 if self._is_making_higher_highs():
                     return MarketRegime.TRENDING_UP
-                return MarketRegime. TRENDING_UP  # Trust ADX even without structure
+                return MarketRegime.TRENDING_UP  # Trust ADX even without structure
             else: 
                 if self._is_making_lower_lows():
                     return MarketRegime.TRENDING_DOWN
-                return MarketRegime. TRENDING_DOWN
+                return MarketRegime.TRENDING_DOWN
         
-        # 3. Check for weak trend (borderline)
-        if self. adx_ranging < adx < self.adx_trending:
+        # 3.Check for weak trend (borderline)
+        if self.adx_ranging < adx < self.adx_trending:
             # Weak trend - could go either way
             # Use recent price action to decide
             if self._is_making_higher_highs() and plus_di > minus_di:
-                return MarketRegime. TRENDING_UP
+                return MarketRegime.TRENDING_UP
             elif self._is_making_lower_lows() and minus_di > plus_di:
-                return MarketRegime. TRENDING_DOWN
+                return MarketRegime.TRENDING_DOWN
         
-        # 4. Default to RANGING
+        # 4.Default to RANGING
         return MarketRegime.RANGING
 
     def _is_making_higher_highs(self) -> bool:
         """Checks if price is making higher highs and higher lows."""
-        if len(self. swing_highs) < 2 or len(self. swing_lows) < 2:
+        if len(self.swing_highs) < 2 or len(self.swing_lows) < 2:
             return False
         
         # Get last 2 swing points
@@ -423,7 +423,7 @@ class RegimeDetector:
         """Returns simplified regime string for strategy mapping."""
         if self.current_regime in [MarketRegime.TRENDING_UP, MarketRegime.TRENDING_DOWN]:
             return "TRENDING"
-        elif self. current_regime == MarketRegime. VOLATILE:
+        elif self.current_regime == MarketRegime.VOLATILE:
             return "VOLATILE"
         else:
             return "RANGING"
@@ -438,7 +438,7 @@ class RegimeDetector:
 # ============================================================
 
 if __name__ == "__main__":
-    print("\n🔬 Testing Regime Detector.. .\n")
+    print("\n🔬 Testing Regime Detector...\n")
     
     # Mock config
     class MockConfig:
@@ -464,9 +464,9 @@ if __name__ == "__main__":
         state = detector.update(high, low, close)
     
     print(f"Regime: {state.regime.value}")
-    print(f"ADX: {state. adx:.1f}")
-    print(f"+DI: {state.plus_di:. 1f} | -DI: {state.minus_di:. 1f}")
-    print(f"ATR: {state. atr:.1f}")
+    print(f"ADX: {state.adx:.1f}")
+    print(f"+DI: {state.plus_di:.1f} | -DI: {state.minus_di:.1f}")
+    print(f"ATR: {state.atr:.1f}")
     print(f"Confidence: {state.confidence:.0f}%")
     
     print("\n✅ Regime Detector Test Complete!")

@@ -7,12 +7,12 @@ This is a REVERSAL strategy that catches:
 - False breakdowns below support (long squeeze then reverse)
 
 How it works:
-1. Price breaks a key level (swing high/low)
-2. Stop-losses get triggered (liquidity grabbed)
-3. Price quickly reverses (smart money entering)
-4. We enter in the reversal direction
+1.Price breaks a key level (swing high/low)
+2.Stop-losses get triggered (liquidity grabbed)
+3.Price quickly reverses (smart money entering)
+4.We enter in the reversal direction
 
-This is how institutional traders and HFTs operate. 
+This is how institutional traders and HFTs operate.
 """
 
 from typing import Tuple, Optional, List
@@ -21,7 +21,7 @@ from collections import deque
 
 import sys
 import os
-sys. path.append(os.path.dirname(os.path.dirname(os.path. abspath(__file__))))
+sys.path.append(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
 from strategies.base_strategy import (
     BaseStrategy, SignalType, MarketData, StrategySignal
@@ -35,13 +35,13 @@ class LiquiditySweepStrategy(BaseStrategy):
     """
     LIQUIDITY SWEEP (STOP HUNT) STRATEGY
     
-    Focus:  Catching reversals after false breakouts. 
+    Focus:  Catching reversals after false breakouts.
     
     The Pattern:
-    1. Price approaches key level (swing high/low, round number)
-    2. Price BREAKS the level (triggering stop-losses)
-    3. Price immediately REVERSES (trap complete)
-    4. We enter in the reversal direction
+    1.Price approaches key level (swing high/low, round number)
+    2.Price BREAKS the level (triggering stop-losses)
+    3.Price immediately REVERSES (trap complete)
+    4.We enter in the reversal direction
     
     Key Insight: 
     - Retail traders put stops just beyond obvious levels
@@ -66,11 +66,11 @@ class LiquiditySweepStrategy(BaseStrategy):
         
         # Sweep detection settings
         self.sweep_threshold = 5  # Points beyond level to confirm sweep
-        self. reversal_threshold = 10  # Points reversal to confirm trap
+        self.reversal_threshold = 10  # Points reversal to confirm trap
         
         # Track potential sweeps
-        self. potential_sweep_high:  Optional[float] = None
-        self. potential_sweep_low: Optional[float] = None
+        self.potential_sweep_high:  Optional[float] = None
+        self.potential_sweep_low: Optional[float] = None
         self.sweep_detected_candle: int = 0
         self.candle_count: int = 0
     
@@ -81,7 +81,7 @@ class LiquiditySweepStrategy(BaseStrategy):
         self.candle_count += 1
         
         # Update recent highs/lows
-        self. recent_highs. append(data.future_high)
+        self.recent_highs.append(data.future_high)
         self.recent_lows.append(data.future_low)
         
         # Need enough data
@@ -108,11 +108,11 @@ class LiquiditySweepStrategy(BaseStrategy):
         for level in context.key_levels:
             # Check for resistance sweep (bullish trap -> go bearish)
             if level.level_type == 'RESISTANCE': 
-                if self._is_resistance_sweep(data, level. price):
+                if self._is_resistance_sweep(data, level.price):
                     score = 3 + level.strength  # Higher strength = better level
                     return (
                         SignalType.BUY_PE,
-                        f"Sweep_Resistance ({level.source}@{level.price:. 0f})",
+                        f"Sweep_Resistance ({level.source}@{level.price:.0f})",
                         min(5, score)
                     )
             
@@ -130,7 +130,7 @@ class LiquiditySweepStrategy(BaseStrategy):
     
     def _check_swing_sweep(self, data: MarketData, context: MarketContext) -> Tuple[SignalType, str, int]:
         """
-        Check for sweeps of recent swing highs/lows. 
+        Check for sweeps of recent swing highs/lows.
         """
         # Find recent swing high (excluding last 2 candles)
         if len(self.recent_highs) >= 5:
@@ -139,7 +139,7 @@ class LiquiditySweepStrategy(BaseStrategy):
             if self._is_resistance_sweep(data, swing_high):
                 return (
                     SignalType.BUY_PE,
-                    f"Sweep_SwingHigh (@{swing_high:. 0f})",
+                    f"Sweep_SwingHigh (@{swing_high:.0f})",
                     3
                 )
         
@@ -149,7 +149,7 @@ class LiquiditySweepStrategy(BaseStrategy):
             
             if self._is_support_sweep(data, swing_low):
                 return (
-                    SignalType. BUY_CE,
+                    SignalType.BUY_CE,
                     f"Sweep_SwingLow (@{swing_low:.0f})",
                     3
                 )
@@ -203,7 +203,7 @@ class LiquiditySweepStrategy(BaseStrategy):
         
         # Check if swept by enough
         sweep_distance = support - data.future_low
-        if sweep_distance < self. sweep_threshold: 
+        if sweep_distance < self.sweep_threshold: 
             return False
         
         # Check if closed above support (rejection)
@@ -226,7 +226,7 @@ class FalseBreakoutStrategy(BaseStrategy):
     - Opening range breakouts that fail
     - Round number breakouts that fail
     
-    Entry after price returns inside the range. 
+    Entry after price returns inside the range.
     """
     
     STRATEGY_NAME = "False_Breakout"
@@ -245,12 +245,12 @@ class FalseBreakoutStrategy(BaseStrategy):
         # Check opening range false breakout
         if context.opening_range_set:
             signal = self._check_opening_range_false_breakout(data, context)
-            if signal[0] != SignalType. NO_SIGNAL: 
+            if signal[0] != SignalType.NO_SIGNAL: 
                 return signal
         
         # Check round number false breakout
         signal = self._check_round_number_false_breakout(data, context)
-        if signal[0] != SignalType. NO_SIGNAL: 
+        if signal[0] != SignalType.NO_SIGNAL: 
             return signal
         
         return SignalType.NO_SIGNAL, "", 0
@@ -269,24 +269,24 @@ class FalseBreakoutStrategy(BaseStrategy):
         # False breakout above OR high
         # Previous candle:  closed above OR high (breakout)
         # Current candle: closed back inside range (failure)
-        if (self.prev_data. future_close > or_high and 
+        if (self.prev_data.future_close > or_high and 
             data.future_close < or_high and
             data.future_close > or_low):
             
             return (
                 SignalType.BUY_PE,
-                f"False_BO_ORH (Range:{or_low:.0f}-{or_high:. 0f})",
+                f"False_BO_ORH (Range:{or_low:.0f}-{or_high:.0f})",
                 4
             )
         
         # False breakout below OR low
         if (self.prev_data.future_close < or_low and 
-            data. future_close > or_low and
+            data.future_close > or_low and
             data.future_close < or_high):
             
             return (
                 SignalType.BUY_CE,
-                f"False_BO_ORL (Range:{or_low:.0f}-{or_high:. 0f})",
+                f"False_BO_ORL (Range:{or_low:.0f}-{or_high:.0f})",
                 4
             )
         
@@ -297,16 +297,16 @@ class FalseBreakoutStrategy(BaseStrategy):
         False breakout of round numbers.
         """
         if self.prev_data is None:
-            return SignalType. NO_SIGNAL, "", 0
+            return SignalType.NO_SIGNAL, "", 0
         
         # Find nearest round number
         round_num = round(data.future_close / self.round_number_interval) * self.round_number_interval
         
         # Check if previous candle broke above round number
         # and current candle fell back below
-        if (self. prev_data.future_close > round_num and 
-            self.prev_data. future_high > round_num + 10 and
-            data. future_close < round_num):
+        if (self.prev_data.future_close > round_num and 
+            self.prev_data.future_high > round_num + 10 and
+            data.future_close < round_num):
             
             return (
                 SignalType.BUY_PE,
@@ -316,7 +316,7 @@ class FalseBreakoutStrategy(BaseStrategy):
         
         # Check break below round number
         if (self.prev_data.future_close < round_num and 
-            self.prev_data. future_low < round_num - 10 and
+            self.prev_data.future_low < round_num - 10 and
             data.future_close > round_num):
             
             return (
@@ -333,7 +333,7 @@ class FalseBreakoutStrategy(BaseStrategy):
 # ============================================================
 
 if __name__ == "__main__": 
-    print("\n🔬 Testing Liquidity Sweep Strategy.. .\n")
+    print("\n🔬 Testing Liquidity Sweep Strategy...\n")
     
     class MockConfig:
         class Exit:
@@ -361,7 +361,7 @@ if __name__ == "__main__":
     print("Building price history...")
     for i in range(5):
         data = MarketData(
-            timestamp=datetime. now(),
+            timestamp=datetime.now(),
             spot_price=24000 + i * 5,
             future_price=24010 + i * 5,
             future_open=24000 + i * 5,
@@ -399,7 +399,7 @@ if __name__ == "__main__":
         volume_relative=1.6
     )
     
-    signal = strategy. check_entry(sweep_data, context)
+    signal = strategy.check_entry(sweep_data, context)
     
     if signal:
         print(f"Signal: {signal.signal_type.value}")
@@ -434,7 +434,7 @@ if __name__ == "__main__":
     signal = strategy.check_entry(sweep_data_low, context)
     
     if signal:
-        print(f"Signal: {signal. signal_type.value}")
+        print(f"Signal: {signal.signal_type.value}")
         print(f"Reason:  {signal.reason}")
         print(f"Strength: {signal.strength.value}")
     else:

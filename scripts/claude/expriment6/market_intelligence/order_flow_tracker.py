@@ -1,6 +1,6 @@
 """
 ORDER FLOW TRACKER
-Tracks institutional activity through OI changes and volume analysis. 
+Tracks institutional activity through OI changes and volume analysis.
 
 What it detects:
 - Long Buildup:  Price ↑ + OI ↑ (Strong bullish)
@@ -22,7 +22,7 @@ from datetime import datetime
 
 import sys
 import os
-sys.path.append(os.path.dirname(os.path. dirname(os.path.abspath(__file__))))
+sys.path.append(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
 from market_intelligence.market_context import OrderFlowState
 
@@ -40,7 +40,7 @@ class VolumeState(Enum):
     """Volume classification."""
     SPIKE = "SPIKE"           # > 2x average
     HIGH = "HIGH"             # > 1.5x average
-    NORMAL = "NORMAL"         # 0. 7x - 1.5x average
+    NORMAL = "NORMAL"         # 0.7x - 1.5x average
     DRY = "DRY"               # < 0.5x average
     
 
@@ -73,23 +73,23 @@ class OrderFlowTracker:
     Tracks order flow through OI and volume analysis.
     
     Key insights:
-    1. OI + Price relationship tells us WHO is in control
-    2. Volume spikes indicate institutional activity
-    3. CE vs PE OI changes reveal market maker positioning
+    1.OI + Price relationship tells us WHO is in control
+    2.Volume spikes indicate institutional activity
+    3.CE vs PE OI changes reveal market maker positioning
     """
     
     def __init__(self, config):
         self.config = config
         
         # Thresholds from config
-        self. oi_significant_change = config.OrderFlow.OI_SIGNIFICANT_CHANGE_PCT
-        self. oi_buildup_threshold = config.OrderFlow.OI_BUILDUP_THRESHOLD
+        self.oi_significant_change = config.OrderFlow.OI_SIGNIFICANT_CHANGE_PCT
+        self.oi_buildup_threshold = config.OrderFlow.OI_BUILDUP_THRESHOLD
         self.volume_spike_mult = config.OrderFlow.VOLUME_SPIKE_MULTIPLIER
-        self. volume_dry_mult = config. OrderFlow.VOLUME_DRY_MULTIPLIER
-        self. oi_lookback = config.OrderFlow. OI_LOOKBACK_PERIODS
+        self.volume_dry_mult = config.OrderFlow.VOLUME_DRY_MULTIPLIER
+        self.oi_lookback = config.OrderFlow.OI_LOOKBACK_PERIODS
         
         # OI History
-        self. oi_history: deque[OISnapshot] = deque(maxlen=100)
+        self.oi_history: deque[OISnapshot] = deque(maxlen=100)
         self.strike_oi_history: Dict[int, deque] = {}  # strike -> deque of OI values
         
         # Price history (for OI-Price correlation)
@@ -99,8 +99,8 @@ class OrderFlowTracker:
         self.volume_history: deque[float] = deque(maxlen=50)
         
         # Current state
-        self.current_signal = OISignal. NEUTRAL
-        self. current_volume_state = VolumeState.NORMAL
+        self.current_signal = OISignal.NEUTRAL
+        self.current_volume_state = VolumeState.NORMAL
         self.smart_money_direction = "NEUTRAL"
         
         # Strike-level tracking
@@ -110,7 +110,7 @@ class OrderFlowTracker:
         self.max_pe_oi_change_strike = 0
         
         # IV tracking
-        self. iv_history: deque[float] = deque(maxlen=50)
+        self.iv_history: deque[float] = deque(maxlen=50)
         self.current_iv_percentile = 50.0
         
         # Warmup
@@ -125,7 +125,7 @@ class OrderFlowTracker:
                strike_data: Dict[int, StrikeOIData],
                atm_strike:  int) -> OrderFlowState: 
         """
-        Main update method.  Call with each data refresh.
+        Main update method. Call with each data refresh.
         
         Args:
             price: Current spot/future price
@@ -139,7 +139,7 @@ class OrderFlowTracker:
             OrderFlowState with current analysis
         """
         self.update_count += 1
-        self.price_history. append(price)
+        self.price_history.append(price)
         self.volume_history.append(volume)
         
         # Calculate PCR
@@ -204,7 +204,7 @@ class OrderFlowTracker:
             pe_oi_change=pe_oi_change,
             ce_oi_change_pct=ce_oi_change_pct,
             pe_oi_change_pct=pe_oi_change_pct,
-            oi_signal=oi_signal. value,
+            oi_signal=oi_signal.value,
             smart_money_direction=smart_money,
             volume_state=volume_state.value,
             relative_volume=relative_volume
@@ -216,7 +216,7 @@ class OrderFlowTracker:
             if strike not in self.strike_oi_history: 
                 self.strike_oi_history[strike] = deque(maxlen=50)
             
-            self.strike_oi_history[strike]. append({
+            self.strike_oi_history[strike].append({
                 'ce_oi': data.ce_oi,
                 'pe_oi': data.pe_oi,
                 'timestamp': datetime.now()
@@ -237,7 +237,7 @@ class OrderFlowTracker:
 
     def _detect_oi_signal(self, current_price: float, current_total_oi: int) -> OISignal: 
         """
-        Detects OI signal based on Price + OI relationship. 
+        Detects OI signal based on Price + OI relationship.
         
         Logic:
         - Price ↑ + OI ↑ = LONG_BUILDUP (New longs entering)
@@ -245,7 +245,7 @@ class OrderFlowTracker:
         - Price ↓ + OI ↓ = LONG_UNWINDING (Longs exiting)
         - Price ↑ + OI ↓ = SHORT_COVERING (Shorts exiting)
         """
-        if len(self. oi_history) < self.oi_lookback + 1:
+        if len(self.oi_history) < self.oi_lookback + 1:
             return OISignal.NEUTRAL
         
         if len(self.price_history) < self.oi_lookback + 1:
@@ -254,7 +254,7 @@ class OrderFlowTracker:
         # Get previous values
         prev_snapshot = self.oi_history[-(self.oi_lookback + 1)]
         prev_price = self.price_history[-(self.oi_lookback + 1)]
-        prev_total_oi = prev_snapshot. total_ce_oi + prev_snapshot.total_pe_oi
+        prev_total_oi = prev_snapshot.total_ce_oi + prev_snapshot.total_pe_oi
         
         # Calculate changes
         price_change = current_price - prev_price
@@ -279,9 +279,9 @@ class OrderFlowTracker:
         elif price_down and oi_up:
             return OISignal.SHORT_BUILDUP
         elif price_down and oi_down:
-            return OISignal. LONG_UNWINDING
+            return OISignal.LONG_UNWINDING
         elif price_up and oi_down:
-            return OISignal. SHORT_COVERING
+            return OISignal.SHORT_COVERING
         else:
             return OISignal.NEUTRAL
 
@@ -293,13 +293,13 @@ class OrderFlowTracker:
             (VolumeState, relative_volume_ratio)
         """
         if len(self.volume_history) < 10:
-            return VolumeState. NORMAL, 1.0
+            return VolumeState.NORMAL, 1.0
         
         # Calculate average (excluding current)
         avg_volume = sum(list(self.volume_history)[:-1]) / (len(self.volume_history) - 1)
         
         if avg_volume == 0:
-            return VolumeState. NORMAL, 1.0
+            return VolumeState.NORMAL, 1.0
         
         relative = current_volume / avg_volume
         
@@ -308,7 +308,7 @@ class OrderFlowTracker:
         elif relative >= 1.5: 
             return VolumeState.HIGH, relative
         elif relative <= self.volume_dry_mult:
-            return VolumeState. DRY, relative
+            return VolumeState.DRY, relative
         else: 
             return VolumeState.NORMAL, relative
 
@@ -325,18 +325,18 @@ class OrderFlowTracker:
         for strike, data in strike_data.items():
             # Max OI
             if data.ce_oi > max_ce_oi: 
-                max_ce_oi = data. ce_oi
+                max_ce_oi = data.ce_oi
                 self.max_ce_oi_strike = strike
             if data.pe_oi > max_pe_oi: 
-                max_pe_oi = data. pe_oi
+                max_pe_oi = data.pe_oi
                 self.max_pe_oi_strike = strike
             
             # Max OI change (absolute)
             if abs(data.ce_oi_change) > max_ce_change:
                 max_ce_change = abs(data.ce_oi_change)
-                self. max_ce_oi_change_strike = strike
+                self.max_ce_oi_change_strike = strike
             if abs(data.pe_oi_change) > max_pe_change:
-                max_pe_change = abs(data. pe_oi_change)
+                max_pe_change = abs(data.pe_oi_change)
                 self.max_pe_oi_change_strike = strike
 
     def _infer_smart_money(self, ce_change_pct: float, pe_change_pct: float,
@@ -344,7 +344,7 @@ class OrderFlowTracker:
         """
         Infers smart money direction from order flow.
         
-        Key insight: Option WRITERS (market makers) are usually right. 
+        Key insight: Option WRITERS (market makers) are usually right.
         - If CE OI increasing fast → Resistance being created → BEARISH
         - If PE OI increasing fast → Support being created → BULLISH
         
@@ -355,7 +355,7 @@ class OrderFlowTracker:
         # OI Change analysis (contrarian)
         if ce_change_pct > self.oi_significant_change:
             score -= 1  # CE writers creating resistance = bearish
-        if pe_change_pct > self. oi_significant_change:
+        if pe_change_pct > self.oi_significant_change:
             score += 1  # PE writers creating support = bullish
         
         # PCR analysis
@@ -393,7 +393,7 @@ class OrderFlowTracker:
         avg_iv = (atm_data.ce_iv + atm_data.pe_iv) / 2 if atm_data.ce_iv > 0 else 0
         
         if avg_iv > 0:
-            self.iv_history. append(avg_iv)
+            self.iv_history.append(avg_iv)
             
             # Calculate percentile
             if len(self.iv_history) >= 20:
@@ -431,7 +431,7 @@ class OrderFlowTracker:
 
     def is_ready(self) -> bool:
         """Checks if tracker has enough data."""
-        return self. is_warmed_up
+        return self.is_warmed_up
 
 
 # ============================================================
@@ -439,7 +439,7 @@ class OrderFlowTracker:
 # ============================================================
 
 if __name__ == "__main__":
-    print("\n🔬 Testing Order Flow Tracker.. .\n")
+    print("\n🔬 Testing Order Flow Tracker...\n")
     
     # Mock config
     class MockConfig:
@@ -479,12 +479,12 @@ if __name__ == "__main__":
         
         state = tracker.update(price, ce_oi, pe_oi, volume, strike_data, 24000)
     
-    print(f"\nOI Signal: {state. oi_signal}")
+    print(f"\nOI Signal: {state.oi_signal}")
     print(f"Smart Money:  {state.smart_money_direction}")
-    print(f"PCR: {state. pcr:. 2f}")
+    print(f"PCR: {state.pcr:.2f}")
     print(f"Volume State: {state.volume_state}")
-    print(f"Relative Volume: {state.relative_volume:. 1f}x")
-    print(f"CE OI Change: {state.ce_oi_change_pct: +.1f}%")
+    print(f"Relative Volume: {state.relative_volume:.1f}x")
+    print(f"CE OI Change: {state.ce_oi_change_pct:+.1f}%")
     print(f"PE OI Change: {state.pe_oi_change_pct:+.1f}%")
     
     print("\n" + "="*50)

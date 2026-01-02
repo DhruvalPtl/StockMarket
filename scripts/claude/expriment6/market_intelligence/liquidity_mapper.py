@@ -1,6 +1,6 @@
 """
 LIQUIDITY MAPPER
-Identifies key price levels where liquidity clusters exist. 
+Identifies key price levels where liquidity clusters exist.
 
 Key Levels:
 - Max Pain Strike (where most options expire worthless)
@@ -10,9 +10,9 @@ Key Levels:
 - VWAP (institutional benchmark)
 
 These levels act as: 
-1. Magnets (price gravitates toward them)
-2. Reversal zones (price bounces off them)
-3. Breakout triggers (when broken, acceleration follows)
+1.Magnets (price gravitates toward them)
+2.Reversal zones (price bounces off them)
+3.Breakout triggers (when broken, acceleration follows)
 """
 
 from dataclasses import dataclass, field
@@ -23,7 +23,7 @@ import math
 
 import sys
 import os
-sys.path.append(os. path.dirname(os.path.dirname(os.path.abspath(__file__))))
+sys.path.append(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
 from market_intelligence.market_context import KeyLevel
 
@@ -50,21 +50,21 @@ class LiquidityZone:
 
 class LiquidityMapper:
     """
-    Maps key liquidity levels in the market. 
+    Maps key liquidity levels in the market.
     
     Provides: 
-    1. Max Pain calculation (option expiry magnet)
-    2. Key OI strikes (writer-created levels)
-    3. Swing point detection (stop-loss clusters)
-    4. Round number levels
-    5. Dynamic support/resistance
+    1.Max Pain calculation (option expiry magnet)
+    2.Key OI strikes (writer-created levels)
+    3.Swing point detection (stop-loss clusters)
+    4.Round number levels
+    5.Dynamic support/resistance
     """
     
     def __init__(self, config):
         self.config = config
         
         # Settings
-        self.swing_lookback = config. Liquidity. SWING_LOOKBACK
+        self.swing_lookback = config.Liquidity.SWING_LOOKBACK
         self.round_number_interval = config.Liquidity.ROUND_NUMBER_INTERVAL
         self.max_pain_range = config.Liquidity.MAX_PAIN_STRIKE_RANGE
         self.level_touch_threshold = config.Liquidity.LEVEL_TOUCH_THRESHOLD
@@ -79,7 +79,7 @@ class LiquidityMapper:
         self.swing_lows: List[SwingPoint] = []
         
         # Key levels
-        self. key_levels: List[KeyLevel] = []
+        self.key_levels: List[KeyLevel] = []
         self.liquidity_zones: List[LiquidityZone] = []
         
         # Max Pain
@@ -111,7 +111,7 @@ class LiquidityMapper:
                option_chain: Dict[int, Dict],
                atm_strike: int) -> List[KeyLevel]:
         """
-        Main update method. 
+        Main update method.
         
         Args:
             high:  Candle high
@@ -168,19 +168,19 @@ class LiquidityMapper:
 
     def _detect_swing_points(self):
         """
-        Detects swing highs and lows. 
+        Detects swing highs and lows.
         
         A swing high:  Higher than N candles before and after
         A swing low: Lower than N candles before and after
         """
-        if len(self. highs) < self.swing_lookback * 2 + 1:
+        if len(self.highs) < self.swing_lookback * 2 + 1:
             return
         
         # Check the middle candle (swing_lookback candles ago)
         idx = -self.swing_lookback - 1
         
         # Get the candidate
-        candidate_high = self. highs[idx]
+        candidate_high = self.highs[idx]
         candidate_low = self.lows[idx]
         
         # Check for swing high
@@ -222,15 +222,15 @@ class LiquidityMapper:
             else: 
                 self.swing_lows.append(SwingPoint(
                     price=candidate_low,
-                    index=self. candle_count + idx,
+                    index=self.candle_count + idx,
                     point_type='LOW',
                     strength=1,
-                    timestamp=datetime. now()
+                    timestamp=datetime.now()
                 ))
         
         # Cleanup old swing points (keep last 20)
         self.swing_highs = self.swing_highs[-20:]
-        self.swing_lows = self. swing_lows[-20:]
+        self.swing_lows = self.swing_lows[-20:]
 
     def _find_existing_swing(self, price: float, point_type: str) -> Optional[SwingPoint]:
         """Finds existing swing point within tolerance."""
@@ -256,7 +256,7 @@ class LiquidityMapper:
         if not option_chain: 
             return
         
-        strikes = sorted(option_chain. keys())
+        strikes = sorted(option_chain.keys())
         
         if not strikes:
             return
@@ -268,7 +268,7 @@ class LiquidityMapper:
             total_pain = 0
             
             for strike, data in option_chain.items():
-                ce_oi = data. get('ce_oi', 0)
+                ce_oi = data.get('ce_oi', 0)
                 pe_oi = data.get('pe_oi', 0)
                 
                 # CE pain: If price < strike, CE expires worthless (0 pain)
@@ -296,7 +296,7 @@ class LiquidityMapper:
 
     def _find_high_oi_strikes(self, option_chain: Dict[int, Dict]):
         """
-        Identifies strikes with highest CE and PE OI. 
+        Identifies strikes with highest CE and PE OI.
         
         High CE OI = Resistance (writers don't want price above)
         High PE OI = Support (writers don't want price below)
@@ -316,13 +316,13 @@ class LiquidityMapper:
         self.resistance_strikes = [s[0] for s in ce_sorted[:3] if s[0] > self.atm_strike]
         
         # Top 3 PE OI strikes (support)
-        self.support_strikes = [s[0] for s in pe_sorted[: 3] if s[0] < self. atm_strike]
+        self.support_strikes = [s[0] for s in pe_sorted[: 3] if s[0] < self.atm_strike]
 
     def _build_key_levels(self):
         """Builds the master list of key levels."""
         self.key_levels = []
         
-        # 1. Add VWAP
+        # 1.Add VWAP
         if self.vwap > 0:
             self.key_levels.append(KeyLevel(
                 price=self.vwap,
@@ -331,7 +331,7 @@ class LiquidityMapper:
                 source='VWAP'
             ))
         
-        # 2. Add Max Pain
+        # 2.Add Max Pain
         if self.max_pain_strike > 0:
             self.key_levels.append(KeyLevel(
                 price=float(self.max_pain_strike),
@@ -340,7 +340,7 @@ class LiquidityMapper:
                 source='OI'
             ))
         
-        # 3. Add OI-based resistance levels
+        # 3.Add OI-based resistance levels
         for strike in self.resistance_strikes[: 2]: 
             self.key_levels.append(KeyLevel(
                 price=float(strike),
@@ -349,7 +349,7 @@ class LiquidityMapper:
                 source='OI'
             ))
         
-        # 4. Add OI-based support levels
+        # 4.Add OI-based support levels
         for strike in self.support_strikes[:2]: 
             self.key_levels.append(KeyLevel(
                 price=float(strike),
@@ -358,27 +358,27 @@ class LiquidityMapper:
                 source='OI'
             ))
         
-        # 5. Add swing highs as resistance
+        # 5.Add swing highs as resistance
         for swing in self.swing_highs[-5:]:
             if swing.price > self.current_price:
                 self.key_levels.append(KeyLevel(
                     price=swing.price,
                     level_type='RESISTANCE',
-                    strength=min(5, swing. strength),
+                    strength=min(5, swing.strength),
                     source='SWING'
                 ))
         
-        # 6. Add swing lows as support
+        # 6.Add swing lows as support
         for swing in self.swing_lows[-5:]:
             if swing.price < self.current_price:
                 self.key_levels.append(KeyLevel(
-                    price=swing. price,
+                    price=swing.price,
                     level_type='SUPPORT',
                     strength=min(5, swing.strength),
                     source='SWING'
                 ))
         
-        # 7. Add round numbers
+        # 7.Add round numbers
         round_levels = self._get_round_number_levels()
         for level in round_levels:
             level_type = 'RESISTANCE' if level > self.current_price else 'SUPPORT'
@@ -389,10 +389,10 @@ class LiquidityMapper:
                 source='ROUND_NUMBER'
             ))
         
-        # 8. Add opening range levels
+        # 8.Add opening range levels
         if self.opening_range_set:
-            self.key_levels. append(KeyLevel(
-                price=self. opening_range_high,
+            self.key_levels.append(KeyLevel(
+                price=self.opening_range_high,
                 level_type='RESISTANCE',
                 strength=3,
                 source='OPENING_RANGE'
@@ -416,13 +416,13 @@ class LiquidityMapper:
         interval = self.round_number_interval
         
         # Find nearest round number below
-        base = math.floor(self. current_price / interval) * interval
+        base = math.floor(self.current_price / interval) * interval
         
         # Get 2 above and 2 below
         for i in range(-2, 3):
             level = base + i * interval
             if level != self.current_price:  # Exclude exact current price
-                levels. append(level)
+                levels.append(level)
         
         return levels
 
@@ -449,7 +449,7 @@ class LiquidityMapper:
                 self.liquidity_zones.append(zone)
         
         # Zones below swing lows (long stop-losses)
-        for swing in self. swing_lows[-3:]:
+        for swing in self.swing_lows[-3:]:
             if swing.price < self.current_price:
                 zone = LiquidityZone(
                     price_low=swing.price - 15,
@@ -462,7 +462,7 @@ class LiquidityMapper:
 
     def get_nearest_support(self) -> float:
         """Returns nearest support level below current price."""
-        supports = [l for l in self. key_levels 
+        supports = [l for l in self.key_levels 
                    if l.level_type == 'SUPPORT' and l.price < self.current_price]
         
         if supports:
@@ -488,7 +488,7 @@ class LiquidityMapper:
 
     def is_near_key_level(self, price: float, tolerance: float = 10) -> Tuple[bool, Optional[KeyLevel]]: 
         """
-        Checks if price is near a key level. 
+        Checks if price is near a key level.
         
         Returns:
             (is_near, nearest_level)
@@ -508,12 +508,12 @@ class LiquidityMapper:
 
     def check_liquidity_sweep(self, high: float, low:  float) -> Optional[LiquidityZone]:
         """
-        Checks if current candle swept a liquidity zone. 
+        Checks if current candle swept a liquidity zone.
         
-        A sweep:  Price briefly enters zone then reverses. 
+        A sweep:  Price briefly enters zone then reverses.
         This is a potential trade setup! 
         """
-        for zone in self. liquidity_zones: 
+        for zone in self.liquidity_zones: 
             if zone.hunted:
                 continue
             
@@ -527,7 +527,7 @@ class LiquidityMapper:
             elif zone.zone_type == 'BELOW_SUPPORT': 
                 if low <= zone.price_high and high > zone.price_high:
                     # Wick went below, but closed above = sweep
-                    zone. hunted = True
+                    zone.hunted = True
                     return zone
         
         return None
@@ -538,7 +538,7 @@ class LiquidityMapper:
         print(f"📊 KEY LEVELS @ {self.current_price:.2f}")
         print(f"{'='*50}")
         
-        print(f"\n🎯 Max Pain: {self. max_pain_strike}")
+        print(f"\n🎯 Max Pain: {self.max_pain_strike}")
         print(f"📈 VWAP: {self.vwap:.2f}")
         
         if self.opening_range_set:
@@ -547,17 +547,17 @@ class LiquidityMapper:
         print(f"\n🔴 Resistance:")
         for level in self.key_levels:
             if level.level_type == 'RESISTANCE' and level.price > self.current_price:
-                print(f"   {level.price:. 2f} ({level.source}, strength:{level.strength})")
+                print(f"   {level.price:.2f} ({level.source}, strength:{level.strength})")
         
         print(f"\n🟢 Support:")
         for level in self.key_levels:
             if level.level_type == 'SUPPORT' and level.price < self.current_price:
-                print(f"   {level.price:.2f} ({level.source}, strength:{level. strength})")
+                print(f"   {level.price:.2f} ({level.source}, strength:{level.strength})")
         
         print(f"\n💧 Liquidity Zones:")
         for zone in self.liquidity_zones: 
             status = "✓ Hunted" if zone.hunted else "Active"
-            print(f"   {zone.price_low:. 2f}-{zone.price_high:.2f} ({zone.zone_type}) [{status}]")
+            print(f"   {zone.price_low:.2f}-{zone.price_high:.2f} ({zone.zone_type}) [{status}]")
         
         print(f"{'='*50}\n")
 
@@ -567,7 +567,7 @@ class LiquidityMapper:
 # ============================================================
 
 if __name__ == "__main__":
-    print("\n🔬 Testing Liquidity Mapper.. .\n")
+    print("\n🔬 Testing Liquidity Mapper...\n")
     
     # Mock config
     class MockConfig:

@@ -1,6 +1,6 @@
 """
 STRATEGY RUNNER
-Executes individual strategies with full context integration. 
+Executes individual strategies with full context integration.
 
 Connects: 
 - Data Engine (prices, indicators)
@@ -16,14 +16,14 @@ import time
 
 import sys
 import os
-sys.path.append(os.path.dirname(os.path. dirname(os.path.abspath(__file__))))
+sys.path.append(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
 from config import BotConfig
-from data. data_engine import DataEngine, StrikeOIData
+from data.data_engine import DataEngine, StrikeOIData
 from strategies.base_strategy import (
     BaseStrategy, MarketData, StrategySignal, SignalType, SignalStrength
 )
-from market_intelligence. market_context import (
+from market_intelligence.market_context import (
     MarketContext, MarketContextBuilder, MarketRegime, MarketBias,
     TimeWindow, VolatilityState, OrderFlowState, KeyLevel,
     get_current_time_window, get_minutes_to_close
@@ -40,11 +40,11 @@ class StrategyRunner:
     Manages the lifecycle of a single strategy instance.
     
     Responsibilities:
-    1. Build MarketData from DataEngine
-    2. Build MarketContext from Intelligence modules
-    3. Call strategy logic
-    4. Manage active position (entry, monitoring, exit)
-    5. Track performance
+    1.Build MarketData from DataEngine
+    2.Build MarketContext from Intelligence modules
+    3.Call strategy logic
+    4.Manage active position (entry, monitoring, exit)
+    5.Track performance
     """
     
     def __init__(self,
@@ -58,7 +58,7 @@ class StrategyRunner:
                  config):
         
         self.strategy = strategy
-        self. engine = engine
+        self.engine = engine
         self.regime_detector = regime_detector
         self.bias_calculator = bias_calculator
         self.order_flow_tracker = order_flow_tracker
@@ -67,7 +67,7 @@ class StrategyRunner:
         self.config = config
         
         # Identity
-        self.strategy_name = strategy. STRATEGY_NAME
+        self.strategy_name = strategy.STRATEGY_NAME
         self.timeframe = engine.timeframe
         
         # Position state
@@ -101,31 +101,31 @@ class StrategyRunner:
         """
         self.tick_count += 1
         
-        # 1. Check if engine is ready
-        if not self.engine. is_ready():
+        # 1.Check if engine is ready
+        if not self.engine.is_ready():
             return None
         
-        # 2. Build MarketData
+        # 2.Build MarketData
         market_data = self._build_market_data()
         
-        # 3. Build MarketContext
+        # 3.Build MarketContext
         context = self._build_market_context()
         
-        # 4. If in position, manage it
+        # 4.If in position, manage it
         if self.active_position:
             self._manage_position(market_data, context)
             return None
         
-        # 5. Check cooldown
+        # 5.Check cooldown
         if not self._is_cooldown_complete():
             return None
         
-        # 6. Check market hours
+        # 6.Check market hours
         if not context.is_tradeable():
             return None
         
-        # 7. Call strategy for signal
-        signal = self. strategy.check_entry(market_data, context)
+        # 7.Call strategy for signal
+        signal = self.strategy.check_entry(market_data, context)
         
         if signal:
             self.signals_generated += 1
@@ -140,22 +140,22 @@ class StrategyRunner:
         return MarketData(
             timestamp=e.timestamp or datetime.now(),
             spot_price=e.spot_ltp,
-            future_price=e. fut_ltp,
+            future_price=e.fut_ltp,
             future_open=e.fut_open,
-            future_high=e. fut_high,
+            future_high=e.fut_high,
             future_low=e.fut_low,
             future_close=e.fut_close,
-            vwap=e. vwap if e.vwap > 0 else e.fut_ltp,
+            vwap=e.vwap if e.vwap > 0 else e.fut_ltp,
             atm_strike=e.atm_strike,
             rsi=e.rsi,
             ema_5=e.ema_5,
-            ema_13=e. ema_13,
-            ema_21=e. ema_21,
+            ema_13=e.ema_13,
+            ema_21=e.ema_21,
             ema_50=e.ema_50,
             adx=e.adx,
             atr=e.atr,
             candle_body=e.candle_body,
-            candle_range=e. candle_range,
+            candle_range=e.candle_range,
             is_green_candle=e.is_green_candle,
             pcr=e.pcr,
             ce_oi_change_pct=self._get_oi_change_pct('CE'),
@@ -167,7 +167,7 @@ class StrategyRunner:
         """Calculates OI change percentage for ATM strike."""
         atm = self.engine.atm_strike
         if atm in self.engine.strikes_data:
-            data = self.engine. strikes_data[atm]
+            data = self.engine.strikes_data[atm]
             if option_type == 'CE':
                 if data.ce_oi > 0:
                     return (data.ce_oi_change / data.ce_oi) * 100
@@ -178,14 +178,14 @@ class StrategyRunner:
     
     def _build_market_context(self) -> MarketContext:
         """Builds MarketContext from Intelligence modules."""
-        e = self. engine
+        e = self.engine
         
         # Get regime
-        regime_state = self.regime_detector.update(e.fut_high, e. fut_low, e.fut_close)
+        regime_state = self.regime_detector.update(e.fut_high, e.fut_low, e.fut_close)
         
         # Get bias
-        bias_state = self.bias_calculator. update(
-            e.spot_ltp, e.fut_ltp, e.vwap, e. pcr, e.rsi
+        bias_state = self.bias_calculator.update(
+            e.spot_ltp, e.fut_ltp, e.vwap, e.pcr, e.rsi
         )
         
         # Get order flow
@@ -193,19 +193,19 @@ class StrategyRunner:
             strike: StrikeOIData(
                 strike=strike,
                 ce_oi=data.ce_oi,
-                pe_oi=data. pe_oi,
+                pe_oi=data.pe_oi,
                 ce_oi_change=data.ce_oi_change,
                 pe_oi_change=data.pe_oi_change,
                 ce_iv=data.ce_iv,
-                pe_iv=data. pe_iv
+                pe_iv=data.pe_iv
             )
-            for strike, data in e.strikes_data. items()
+            for strike, data in e.strikes_data.items()
         }
         
         order_flow_state = self.order_flow_tracker.update(
             e.fut_ltp,
             e.total_ce_oi,
-            e. total_pe_oi,
+            e.total_pe_oi,
             e.current_volume,
             strike_data,
             e.atm_strike
@@ -213,12 +213,12 @@ class StrategyRunner:
         
         # Get key levels
         option_chain = {
-            strike: {'ce_oi':  data.ce_oi, 'pe_oi': data. pe_oi}
+            strike: {'ce_oi':  data.ce_oi, 'pe_oi': data.pe_oi}
             for strike, data in e.strikes_data.items()
         }
         
         key_levels = self.liquidity_mapper.update(
-            e. fut_high, e.fut_low, e.fut_close, e.vwap,
+            e.fut_high, e.fut_low, e.fut_close, e.vwap,
             option_chain, e.atm_strike
         )
         
@@ -226,8 +226,8 @@ class StrategyRunner:
         builder = MarketContextBuilder()
         
         # Regime
-        builder. set_regime(
-            regime_state. regime,
+        builder.set_regime(
+            regime_state.regime,
             regime_state.adx,
             regime_state.regime_duration
         )
@@ -243,26 +243,26 @@ class StrategyRunner:
         
         # Volatility
         vol_state = self._get_volatility_state(e.atr, regime_state)
-        builder.set_volatility(vol_state, e.atr, regime_state. atr_percentile, e.get_iv_percentile())
+        builder.set_volatility(vol_state, e.atr, regime_state.atr_percentile, e.get_iv_percentile())
         
         # Prices
-        builder.set_prices(e.spot_ltp, e.fut_ltp, e. vwap)
+        builder.set_prices(e.spot_ltp, e.fut_ltp, e.vwap)
         
         # Indicators
         ema_alignment = self._get_ema_alignment()
         builder.set_indicators(ema_alignment, e.rsi, e.adx)
         
         # Key levels
-        support = self. liquidity_mapper. get_nearest_support()
+        support = self.liquidity_mapper.get_nearest_support()
         resistance = self.liquidity_mapper.get_nearest_resistance()
         max_pain = self.liquidity_mapper.get_max_pain()
         builder.set_key_levels(key_levels, support, resistance, max_pain, e.atm_strike)
         
         # Order flow
-        builder. set_order_flow(order_flow_state)
+        builder.set_order_flow(order_flow_state)
         
         # Opening range
-        or_high, or_low, or_set = self. liquidity_mapper.get_opening_range()
+        or_high, or_low, or_set = self.liquidity_mapper.get_opening_range()
         builder.set_opening_range(or_high, or_low, or_set)
         
         # Recommendations
@@ -286,33 +286,33 @@ class StrategyRunner:
     def _get_ema_alignment(self) -> str:
         """Determines EMA alignment."""
         e = self.engine
-        if e.ema_5 > e. ema_13 > e.ema_21:
+        if e.ema_5 > e.ema_13 > e.ema_21:
             return "BULLISH"
-        elif e.ema_5 < e.ema_13 < e. ema_21:
+        elif e.ema_5 < e.ema_13 < e.ema_21:
             return "BEARISH"
         return "MIXED"
     
     def _is_expiry_day(self) -> bool:
         """Checks if today is expiry day."""
         today = datetime.now().strftime("%Y-%m-%d")
-        return today == self. config. OPTION_EXPIRY
+        return today == self.config.OPTION_EXPIRY
     
     def _get_recommended_strategies(self, regime:  RegimeState, bias: BiasState) -> List[str]: 
         """Gets recommended strategies for current conditions."""
-        regime_simple = "TRENDING" if regime.regime in [MarketRegime. TRENDING_UP, MarketRegime.TRENDING_DOWN] else (
-            "VOLATILE" if regime.regime == MarketRegime. VOLATILE else "RANGING"
+        regime_simple = "TRENDING" if regime.regime in [MarketRegime.TRENDING_UP, MarketRegime.TRENDING_DOWN] else (
+            "VOLATILE" if regime.regime == MarketRegime.VOLATILE else "RANGING"
         )
-        return self. config.STRATEGY_REGIME_RULES.get(regime_simple, [])
+        return self.config.STRATEGY_REGIME_RULES.get(regime_simple, [])
     
     def _get_preferred_direction(self, bias:  BiasState, order_flow: OrderFlowState) -> str:
         """Gets preferred trading direction."""
-        if bias.bias in [MarketBias. STRONG_BULLISH, MarketBias. BULLISH]:
+        if bias.bias in [MarketBias.STRONG_BULLISH, MarketBias.BULLISH]:
             return "CE"
-        elif bias.bias in [MarketBias. STRONG_BEARISH, MarketBias.BEARISH]: 
+        elif bias.bias in [MarketBias.STRONG_BEARISH, MarketBias.BEARISH]: 
             return "PE"
         
         # Use order flow as tiebreaker
-        if order_flow. smart_money_direction == "BULLISH": 
+        if order_flow.smart_money_direction == "BULLISH": 
             return "CE"
         elif order_flow.smart_money_direction == "BEARISH":
             return "PE"
@@ -334,7 +334,7 @@ class StrategyRunner:
     
     def enter_position(self, signal: StrategySignal, size_multiplier: float = 1.0) -> bool:
         """
-        Enters a new position based on signal. 
+        Enters a new position based on signal.
         
         Returns:
             True if position entered, False otherwise
@@ -345,17 +345,17 @@ class StrategyRunner:
         option_type = 'CE' if signal.signal_type == SignalType.BUY_CE else 'PE'
         
         # Get strike
-        max_cost = self.config. Risk. CAPITAL_PER_STRATEGY * self.config.Risk. MAX_CAPITAL_USAGE_PCT * size_multiplier
-        strike_data = self.engine. get_affordable_strike(option_type, max_cost)
+        max_cost = self.config.Risk.CAPITAL_PER_STRATEGY * self.config.Risk.MAX_CAPITAL_USAGE_PCT * size_multiplier
+        strike_data = self.engine.get_affordable_strike(option_type, max_cost)
         
         if not strike_data: 
             print(f"⚠️ [{self.strategy_name}] No affordable strike for {option_type}")
             return False
         
         entry_price = strike_data.ce_ltp if option_type == 'CE' else strike_data.pe_ltp
-        strike = strike_data. strike
+        strike = strike_data.strike
         
-        if entry_price <= 0. 1:
+        if entry_price <= 0.1:
             return False
         
         # Get exit parameters
@@ -363,13 +363,13 @@ class StrategyRunner:
         stop_pts = signal.suggested_stop or self.config.Exit.DEFAULT_STOP_LOSS_POINTS
         
         # Register with risk manager
-        self. position_id = self. risk_manager.register_position(
-            strategy_name=self. strategy_name,
+        self.position_id = self.risk_manager.register_position(
+            strategy_name=self.strategy_name,
             timeframe=self.timeframe,
             direction=signal.signal_type,
             strike=strike,
             entry_price=entry_price,
-            quantity=self.config.Risk. LOT_SIZE
+            quantity=self.config.Risk.LOT_SIZE
         )
         
         # Store position locally
@@ -380,7 +380,7 @@ class StrategyRunner:
             'strike': strike,
             'entry_price':  entry_price,
             'entry_time': datetime.now(),
-            'quantity': self.config. Risk.LOT_SIZE,
+            'quantity': self.config.Risk.LOT_SIZE,
             'signal':  signal
         }
         
@@ -394,9 +394,9 @@ class StrategyRunner:
         self.engine.register_active_strike(strike)
         
         # Mark strategy
-        self.strategy. mark_trade_executed()
+        self.strategy.mark_trade_executed()
         
-        print(f"\n🚀 ENTRY [{self.strategy_name}]:  {option_type} {strike} @ ₹{entry_price:. 2f}")
+        print(f"\n🚀 ENTRY [{self.strategy_name}]:  {option_type} {strike} @ ₹{entry_price:.2f}")
         print(f"   Target: ₹{self.target_price:.2f} | SL: ₹{self.stop_loss_price:.2f}")
         
         return True
@@ -425,7 +425,7 @@ class StrategyRunner:
         exit_reason = None
         
         # Stop loss
-        if current_price <= self. stop_loss_price:
+        if current_price <= self.stop_loss_price:
             exit_reason = "STOP_LOSS"
         
         # Target
@@ -438,12 +438,12 @@ class StrategyRunner:
             target_profit = self.target_price - pos['entry_price']
             
             if not self.trailing_active:
-                activation_pct = self.config.Exit. TRAILING_ACTIVATION_PCT
+                activation_pct = self.config.Exit.TRAILING_ACTIVATION_PCT
                 if profit >= target_profit * activation_pct: 
                     self.trailing_active = True
             
-            if self. trailing_active: 
-                trail_distance = self.config.Exit. TRAILING_DISTANCE_PCT
+            if self.trailing_active: 
+                trail_distance = self.config.Exit.TRAILING_DISTANCE_PCT
                 trail_price = self.peak_price * (1 - trail_distance)
                 if current_price <= trail_price:
                     exit_reason = "TRAILING_STOP"
@@ -469,7 +469,7 @@ class StrategyRunner:
         pos = self.active_position
         
         # Close with risk manager
-        net_pnl = self. risk_manager.close_position(self. position_id, exit_price)
+        net_pnl = self.risk_manager.close_position(self.position_id, exit_price)
         
         # Calculate details
         gross_pnl = (exit_price - pos['entry_price']) * pos['quantity']
@@ -496,13 +496,13 @@ class StrategyRunner:
             'pnl_pct': pnl_pct,
             'exit_reason': reason
         }
-        self.trades_today. append(trade_record)
+        self.trades_today.append(trade_record)
         
         # Print summary
         icon = "✅" if net_pnl > 0 else "🔻"
         print(f"\n{icon} EXIT [{self.strategy_name}]: {pos['type']} {pos['strike']}")
         print(f"   Entry: ₹{pos['entry_price']:.2f} → Exit: ₹{exit_price:.2f}")
-        print(f"   PnL: ₹{net_pnl: +,. 2f} ({pnl_pct: +.2f}%)")
+        print(f"   PnL: ₹{net_pnl:+,.2f} ({pnl_pct:+.2f}%)")
         print(f"   Reason: {reason}")
         
         # Cleanup
@@ -537,9 +537,9 @@ class StrategyRunner:
             'wins': wins,
             'losses': losses,
             'win_rate': (wins / len(self.trades_today) * 100) if self.trades_today else 0,
-            'daily_pnl': self. daily_pnl,
+            'daily_pnl': self.daily_pnl,
             'signals':  self.signals_generated,
-            'in_position': self. active_position is not None
+            'in_position': self.active_position is not None
         }
     
     def has_position(self) -> bool:
@@ -552,7 +552,7 @@ class StrategyRunner:
 # ============================================================
 
 if __name__ == "__main__":
-    print("\n🔬 Testing Strategy Runner.. .\n")
+    print("\n🔬 Testing Strategy Runner...\n")
     
     # This would require full setup, so just test imports
     print("✅ Strategy Runner module loaded successfully!")

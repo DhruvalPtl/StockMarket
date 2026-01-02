@@ -2,7 +2,7 @@
 EXPERIMENT 6 - MAIN ENTRY POINT
 
 Intelligent Multi-Strategy Trading System
-Run this file to start the trading bot. 
+Run this file to start the trading bot.
 
 Usage:
     python main.py
@@ -16,7 +16,7 @@ import argparse
 from datetime import datetime
 
 # Add current directory to path
-current_dir = os. path.dirname(os.path.abspath(__file__))
+current_dir = os.path.dirname(os.path.abspath(__file__))
 sys.path.insert(0, current_dir)
 
 
@@ -49,14 +49,14 @@ def print_config_summary():
     
     print("\n⚙️  CONFIGURATION SUMMARY")
     print("-" * 40)
-    print(f"📊 Timeframes:      {len(BotConfig.TIMEFRAMES)} - {BotConfig. TIMEFRAMES}")
+    print(f"📊 Timeframes:      {len(BotConfig.TIMEFRAMES)} - {BotConfig.TIMEFRAMES}")
     print(f"🧠 Strategies:     {len(BotConfig.STRATEGIES_TO_RUN)}")
     for strat in BotConfig.STRATEGIES_TO_RUN: 
         print(f"                   • {strat}")
     print(f"💰 Capital/Strat:  ₹{BotConfig.Risk.CAPITAL_PER_STRATEGY: ,.0f}")
     print(f"📈 Max Positions:  {BotConfig.Risk.MAX_CONCURRENT_POSITIONS}")
-    print(f"🎯 Option Expiry:  {BotConfig. OPTION_EXPIRY}")
-    print(f"⚡ Total Bots:     {len(BotConfig. TIMEFRAMES) * len(BotConfig.STRATEGIES_TO_RUN)}")
+    print(f"🎯 Option Expiry:  {BotConfig.OPTION_EXPIRY}")
+    print(f"⚡ Total Bots:     {len(BotConfig.TIMEFRAMES) * len(BotConfig.STRATEGIES_TO_RUN)}")
     print("-" * 40)
     print("📝 MODE:  PAPER TRADING (No real money)")
     print("-" * 40)
@@ -74,12 +74,12 @@ def confirm_start() -> bool:
 
 def run_test_mode():
     """Runs quick test to verify system."""
-    print("\n🧪 RUNNING TEST MODE.. .\n")
+    print("\n🧪 RUNNING TEST MODE...\n")
     
     from config import BotConfig
     
     # Test config
-    print("1. Testing Configuration...")
+    print("1.Testing Configuration...")
     try:
         BotConfig.validate()
         print("   ✅ Configuration valid")
@@ -88,9 +88,9 @@ def run_test_mode():
         return False
     
     # Test data engine
-    print("\n2. Testing Data Engine...")
+    print("\n2.Testing Data Engine...")
     try:
-        from data. data_engine import DataEngine
+        from data.data_engine import DataEngine
         engine = DataEngine(
             api_key="test",
             api_secret="test",
@@ -106,7 +106,7 @@ def run_test_mode():
         return False
     
     # Test intelligence modules
-    print("\n3. Testing Market Intelligence...")
+    print("\n3.Testing Market Intelligence...")
     try:
         from market_intelligence.regime_detector import RegimeDetector
         from market_intelligence.bias_calculator import BiasCalculator
@@ -117,8 +117,8 @@ def run_test_mode():
         # Feed some data
         for _ in range(15):
             regime.update(engine.fut_high or 24000, engine.fut_low or 23950, engine.fut_ltp or 24000)
-            bias.update(engine.spot_ltp or 24000, engine. fut_ltp or 24000, 
-                       engine. vwap or 24000, engine.pcr or 1. 0, engine.rsi or 50)
+            bias.update(engine.spot_ltp or 24000, engine.fut_ltp or 24000, 
+                       engine.vwap or 24000, engine.pcr or 1.0, engine.rsi or 50)
         
         print(f"   ✅ Regime Detector working")
         print(f"   ✅ Bias Calculator working")
@@ -127,10 +127,10 @@ def run_test_mode():
         return False
     
     # Test strategies
-    print("\n4. Testing Strategies...")
+    print("\n4.Testing Strategies...")
     try:
-        from strategies. trend_strategies import OriginalStrategy
-        from strategies. base_strategy import MarketData
+        from strategies.trend_strategies import OriginalStrategy
+        from strategies.base_strategy import MarketData
         from market_intelligence.market_context import MarketContextBuilder, MarketRegime, MarketBias, TimeWindow, VolatilityState
         
         strat = OriginalStrategy(BotConfig)
@@ -151,7 +151,7 @@ def run_test_mode():
             .set_regime(MarketRegime.TRENDING_UP, 28, 10)\
             .set_bias(MarketBias.BULLISH, 40)\
             .set_time_window(TimeWindow.MORNING_SESSION, 280, False)\
-            .set_volatility(VolatilityState. NORMAL, 50, 50, 50)\
+            .set_volatility(VolatilityState.NORMAL, 50, 50, 50)\
             .build()
         
         signal = strat.check_entry(data, context)
@@ -163,7 +163,7 @@ def run_test_mode():
         return False
     
     # Test risk manager
-    print("\n5. Testing Risk Manager...")
+    print("\n5.Testing Risk Manager...")
     try:
         from execution.risk_manager import RiskManager
         risk = RiskManager(BotConfig)
@@ -211,14 +211,14 @@ def main():
         from orchestrator import Orchestrator
         
         orchestrator = Orchestrator()
-        orchestrator. run()
+        orchestrator.run()
         
     except KeyboardInterrupt: 
         print("\n\n👋 Interrupted by user.")
     except Exception as e: 
         print(f"\n❌ FATAL ERROR: {e}")
         import traceback
-        traceback. print_exc()
+        traceback.print_exc()
         sys.exit(1)
     
     print("\n✅ System shutdown complete.")

@@ -1,6 +1,6 @@
 """
 VOLATILITY STRATEGIES
-Strategies that capitalize on volatility expansion. 
+Strategies that capitalize on volatility expansion.
 
 Contains:
 - VolatilitySpikeStrategy: Enters when IV spikes (big move expected)
@@ -13,7 +13,7 @@ from collections import deque
 
 import sys
 import os
-sys. path.append(os.path.dirname(os.path.dirname(os.path. abspath(__file__))))
+sys.path.append(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
 from strategies.base_strategy import (
     BaseStrategy, SignalType, MarketData, StrategySignal
@@ -27,7 +27,7 @@ class VolatilitySpikeStrategy(BaseStrategy):
     """
     VOLATILITY SPIKE STRATEGY
     
-    Focus: Entering when IV (Implied Volatility) spikes. 
+    Focus: Entering when IV (Implied Volatility) spikes.
     
     Theory:
     - IV spike = Market expects big move
@@ -35,10 +35,10 @@ class VolatilitySpikeStrategy(BaseStrategy):
     - Use price action + bias to determine direction
     
     Entry Logic:
-    1. IV percentile > 70 (volatility expanding)
-    2. ATR spiking (confirming volatility)
-    3. Clear directional bias (to pick CE or PE)
-    4. Volume confirmation (institutional activity)
+    1.IV percentile > 70 (volatility expanding)
+    2.ATR spiking (confirming volatility)
+    3.Clear directional bias (to pick CE or PE)
+    4.Volume confirmation (institutional activity)
     
     Works best in: VOLATILE markets, NEWS events
     """
@@ -67,7 +67,7 @@ class VolatilitySpikeStrategy(BaseStrategy):
         Detects volatility spikes and enters in direction of bias.
         """
         # Track ATR
-        self.atr_history.append(data. atr)
+        self.atr_history.append(data.atr)
         
         # Need enough history
         if len(self.atr_history) < 10:
@@ -79,7 +79,7 @@ class VolatilitySpikeStrategy(BaseStrategy):
         
         # Volume confirmation
         if data.volume_relative < self.min_volume_ratio:
-            return SignalType. NO_SIGNAL, "", 0
+            return SignalType.NO_SIGNAL, "", 0
         
         # Determine direction from context
         direction = self._determine_direction(data, context)
@@ -93,7 +93,7 @@ class VolatilitySpikeStrategy(BaseStrategy):
     
     def _is_volatility_spiking(self, data: MarketData, context: MarketContext) -> bool:
         """
-        Check if volatility is spiking. 
+        Check if volatility is spiking.
         Uses ATR and context IV percentile.
         """
         # Check ATR spike
@@ -116,32 +116,32 @@ class VolatilitySpikeStrategy(BaseStrategy):
         bullish_score = 0
         bearish_score = 0
         
-        # 1. Context bias
-        if context. bias in [MarketBias. STRONG_BULLISH, MarketBias. BULLISH]:
+        # 1.Context bias
+        if context.bias in [MarketBias.STRONG_BULLISH, MarketBias.BULLISH]:
             bullish_score += 2
-        elif context. bias in [MarketBias.STRONG_BEARISH, MarketBias. BEARISH]: 
+        elif context.bias in [MarketBias.STRONG_BEARISH, MarketBias.BEARISH]: 
             bearish_score += 2
         
-        # 2. Price vs VWAP
+        # 2.Price vs VWAP
         if data.price_above_vwap: 
             bullish_score += 1
         else:
             bearish_score += 1
         
-        # 3. Candle direction
-        if data. is_green_candle and data.strong_candle: 
+        # 3.Candle direction
+        if data.is_green_candle and data.strong_candle: 
             bullish_score += 2
         elif not data.is_green_candle and data.strong_candle:
             bearish_score += 2
         
-        # 4. EMA alignment
-        if data. ema_bullish: 
+        # 4.EMA alignment
+        if data.ema_bullish: 
             bullish_score += 1
-        elif data. ema_bearish: 
+        elif data.ema_bearish: 
             bearish_score += 1
         
-        # 5. Order flow
-        if context.order_flow. smart_money_direction == "BULLISH": 
+        # 5.Order flow
+        if context.order_flow.smart_money_direction == "BULLISH": 
             bullish_score += 1
         elif context.order_flow.smart_money_direction == "BEARISH":
             bearish_score += 1
@@ -160,7 +160,7 @@ class VolatilitySpikeStrategy(BaseStrategy):
         
         if context.regime == MarketRegime.TRENDING_UP:
             score += 1
-        if data.volume_relative >= 2. 0:
+        if data.volume_relative >= 2.0:
             score += 1
         
         avg_atr = sum(self.atr_history) / len(self.atr_history)
@@ -168,7 +168,7 @@ class VolatilitySpikeStrategy(BaseStrategy):
         
         return (
             SignalType.BUY_CE,
-            f"Vol_Spike_Up (ATR:{atr_ratio:.1f}x IV:{context.iv_percentile:. 0f}%)",
+            f"Vol_Spike_Up (ATR:{atr_ratio:.1f}x IV:{context.iv_percentile:.0f}%)",
             min(5, score)
         )
     
@@ -176,7 +176,7 @@ class VolatilitySpikeStrategy(BaseStrategy):
         """Generate bearish signal on volatility spike."""
         score = 4
         
-        if context. regime == MarketRegime.TRENDING_DOWN:
+        if context.regime == MarketRegime.TRENDING_DOWN:
             score += 1
         if data.volume_relative >= 2.0:
             score += 1
@@ -186,7 +186,7 @@ class VolatilitySpikeStrategy(BaseStrategy):
         
         return (
             SignalType.BUY_PE,
-            f"Vol_Spike_Down (ATR:{atr_ratio:.1f}x IV:{context. iv_percentile:. 0f}%)",
+            f"Vol_Spike_Down (ATR:{atr_ratio:.1f}x IV:{context.iv_percentile:.0f}%)",
             min(5, score)
         )
 
@@ -195,7 +195,7 @@ class OpeningRangeBreakoutStrategy(BaseStrategy):
     """
     OPENING RANGE BREAKOUT (ORB) STRATEGY
     
-    Focus: Capturing the first major move of the day. 
+    Focus: Capturing the first major move of the day.
     
     Theory:
     - First 15-30 minutes establish the "opening range"
@@ -203,10 +203,10 @@ class OpeningRangeBreakoutStrategy(BaseStrategy):
     - Volume on breakout confirms institutional participation
     
     Entry Logic:
-    1. Wait for opening range to form (first 15 candles)
-    2. Price breaks above/below range with volume
-    3. Enter in breakout direction
-    4. Use range as stop loss reference
+    1.Wait for opening range to form (first 15 candles)
+    2.Price breaks above/below range with volume
+    3.Enter in breakout direction
+    4.Use range as stop loss reference
     
     ONLY active during:  9:30 - 10:30 (after range forms)
     """
@@ -230,7 +230,7 @@ class OpeningRangeBreakoutStrategy(BaseStrategy):
     
     def _check_entry_conditions(self, data: MarketData, context:  MarketContext) -> Tuple[SignalType, str, int]:
         """
-        Checks for opening range breakout. 
+        Checks for opening range breakout.
         """
         # Reset daily state
         today = datetime.now().date()
@@ -240,7 +240,7 @@ class OpeningRangeBreakoutStrategy(BaseStrategy):
         
         # Only trade one ORB per day
         if self.breakout_traded_today:
-            return SignalType. NO_SIGNAL, "", 0
+            return SignalType.NO_SIGNAL, "", 0
         
         # Need opening range to be set
         if not context.opening_range_set:
@@ -283,7 +283,7 @@ class OpeningRangeBreakoutStrategy(BaseStrategy):
             
             return (
                 SignalType.BUY_CE,
-                f"ORB_Up (Range:{or_low:.0f}-{or_high:.0f} Break:{data.future_close:. 0f})",
+                f"ORB_Up (Range:{or_low:.0f}-{or_high:.0f} Break:{data.future_close:.0f})",
                 min(5, score)
             )
         
@@ -343,7 +343,7 @@ if __name__ == "__main__":
             volume_relative=1.0
         )
         context = MarketContextBuilder()\
-            .set_volatility(VolatilityState. NORMAL, 40, 50, 50)\
+            .set_volatility(VolatilityState.NORMAL, 40, 50, 50)\
             .set_time_window(TimeWindow.MORNING_SESSION, 280, False)\
             .build()
         vol_strategy.check_entry(normal_data, context)
@@ -370,7 +370,7 @@ if __name__ == "__main__":
         .set_order_flow(OrderFlowState(smart_money_direction="BULLISH"))\
         .build()
     
-    signal = vol_strategy. check_entry(spike_data, spike_context)
+    signal = vol_strategy.check_entry(spike_data, spike_context)
     
     if signal: 
         print(f"Signal: {signal.signal_type.value}")
@@ -413,7 +413,7 @@ if __name__ == "__main__":
     if signal:
         print(f"Signal:  {signal.signal_type.value}")
         print(f"Reason: {signal.reason}")
-        print(f"Strength: {signal. strength.value}")
+        print(f"Strength: {signal.strength.value}")
     else:
         print("No signal (check time window - must be 9:45-10:30)")
     

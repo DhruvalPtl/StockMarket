@@ -1,9 +1,9 @@
 """
 Market Intelligence Module
-Contains regime detection, bias calculation, order flow tracking, and liquidity mapping. 
+Contains regime detection, bias calculation, order flow tracking, and liquidity mapping.
 """
 
-from . market_context import (
+from .market_context import (
     MarketContext,
     MarketContextBuilder,
     MarketRegime,

@@ -1,6 +1,6 @@
 """
 TREND STRATEGIES
-Strategies optimized for trending market conditions. 
+Strategies optimized for trending market conditions.
 
 Contains:
 - OriginalStrategy:  Hybrid early/full market approach
@@ -13,7 +13,7 @@ from datetime import datetime, time
 
 import sys
 import os
-sys.path.append(os.path.dirname(os.path. dirname(os.path.abspath(__file__))))
+sys.path.append(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
 from strategies.base_strategy import (
     BaseStrategy, SignalType, MarketData, StrategySignal
@@ -54,14 +54,14 @@ class OriginalStrategy(BaseStrategy):
         current_time = datetime.now().time()
         
         # Determine mode
-        if current_time < self. early_mode_cutoff:
+        if current_time < self.early_mode_cutoff:
             return self._early_market_logic(data, context)
         else: 
             return self._full_market_logic(data, context)
     
     def _early_market_logic(self, data:  MarketData, context: MarketContext) -> Tuple[SignalType, str, int]: 
         """
-        Early market (9:15 - 10:00): Simplified bias-based approach. 
+        Early market (9:15 - 10:00): Simplified bias-based approach.
         Uses VWAP + PCR + Candle pattern.
         """
         # Safety check
@@ -81,7 +81,7 @@ class OriginalStrategy(BaseStrategy):
         # Factor 2: PCR (weight: 1)
         if data.pcr > 1.1:
             bullish_score += 1  # High put writing = support
-        elif data. pcr < 0.9:
+        elif data.pcr < 0.9:
             bearish_score += 1  # High call writing = resistance
         
         # Factor 3: Candle color (weight: 1)
@@ -91,22 +91,22 @@ class OriginalStrategy(BaseStrategy):
             bearish_score += 1
         
         # Factor 4: Bias alignment (weight: 1)
-        if context.bias in [MarketBias. BULLISH, MarketBias.STRONG_BULLISH]: 
+        if context.bias in [MarketBias.BULLISH, MarketBias.STRONG_BULLISH]: 
             bullish_score += 1
-        elif context.bias in [MarketBias. BEARISH, MarketBias. STRONG_BEARISH]:
+        elif context.bias in [MarketBias.BEARISH, MarketBias.STRONG_BEARISH]:
             bearish_score += 1
         
         # Generate signal if score >= 3
         if bullish_score >= 3 and bullish_score > bearish_score: 
             return (
-                SignalType. BUY_CE,
+                SignalType.BUY_CE,
                 f"Early_Bullish (Score:{bullish_score} VWAP+PCR:{data.pcr:.2f})",
                 min(5, bullish_score)
             )
         elif bearish_score >= 3 and bearish_score > bullish_score: 
             return (
                 SignalType.BUY_PE,
-                f"Early_Bearish (Score:{bearish_score} VWAP+PCR:{data.pcr:. 2f})",
+                f"Early_Bearish (Score:{bearish_score} VWAP+PCR:{data.pcr:.2f})",
                 min(5, bearish_score)
             )
         
@@ -122,46 +122,46 @@ class OriginalStrategy(BaseStrategy):
             return SignalType.NO_SIGNAL, "", 0
         
         # BUY CE conditions: 
-        # 1. Futures > VWAP
-        # 2. EMA bullish (5 > 13)
-        # 3. RSI in bullish momentum zone (55-75)
-        # 4. Price above EMA5
+        # 1.Futures > VWAP
+        # 2.EMA bullish (5 > 13)
+        # 3.RSI in bullish momentum zone (55-75)
+        # 4.Price above EMA5
         if (data.price_above_vwap and 
-            data.ema_5 > data. ema_13 and 
-            data. rsi_bullish_momentum and
+            data.ema_5 > data.ema_13 and 
+            data.rsi_bullish_momentum and
             data.price_above_ema5):
             
             score = 3
-            if data. ema_bullish:  # Full EMA alignment
+            if data.ema_bullish:  # Full EMA alignment
                 score += 1
             if data.strong_candle and data.is_green_candle: 
                 score += 1
             
             return (
                 SignalType.BUY_CE,
-                f"Full_Bullish (EMA Cross + RSI:{data.rsi:. 1f} + VWAP)",
+                f"Full_Bullish (EMA Cross + RSI:{data.rsi:.1f} + VWAP)",
                 score
             )
         
         # BUY PE conditions:
-        # 1. Futures < VWAP
-        # 2. EMA bearish (5 < 13)
-        # 3. RSI in bearish momentum zone (25-45)
-        # 4. Price below EMA5
+        # 1.Futures < VWAP
+        # 2.EMA bearish (5 < 13)
+        # 3.RSI in bearish momentum zone (25-45)
+        # 4.Price below EMA5
         if (data.price_below_vwap and 
-            data.ema_5 < data. ema_13 and 
-            data. rsi_bearish_momentum and
+            data.ema_5 < data.ema_13 and 
+            data.rsi_bearish_momentum and
             data.price_below_ema5):
             
             score = 3
-            if data. ema_bearish:  # Full EMA alignment
+            if data.ema_bearish:  # Full EMA alignment
                 score += 1
             if data.strong_candle and not data.is_green_candle: 
                 score += 1
             
             return (
                 SignalType.BUY_PE,
-                f"Full_Bearish (EMA Cross + RSI:{data.rsi:. 1f} + VWAP)",
+                f"Full_Bearish (EMA Cross + RSI:{data.rsi:.1f} + VWAP)",
                 score
             )
         
@@ -172,7 +172,7 @@ class VWAPEMATrendStrategy(BaseStrategy):
     """
     VWAP + EMA TREND STRATEGY
     
-    Focus:  Capturing sustainable trends confirmed by multiple indicators. 
+    Focus:  Capturing sustainable trends confirmed by multiple indicators.
     
     Entry Logic:
     - Price above/below VWAP (institutional bias)
@@ -193,21 +193,21 @@ class VWAPEMATrendStrategy(BaseStrategy):
         Trend following with VWAP + EMA alignment.
         """
         # Need valid data
-        if data.vwap == 0 or data. ema_5 == 0:
-            return SignalType. NO_SIGNAL, "", 0
+        if data.vwap == 0 or data.ema_5 == 0:
+            return SignalType.NO_SIGNAL, "", 0
         
         # Additional regime check (be strict about trending)
-        if context.regime not in [MarketRegime. TRENDING_UP, MarketRegime.TRENDING_DOWN]:
+        if context.regime not in [MarketRegime.TRENDING_UP, MarketRegime.TRENDING_DOWN]:
             return SignalType.NO_SIGNAL, "", 0
         
         # BUY CE:  Uptrend confirmation
-        # 1. Price > VWAP (above institutional average)
-        # 2. EMA 5 > EMA 13 (short-term uptrend)
-        # 3. Price > EMA 5 (momentum intact)
-        # 4. ADX > 25 (trend strength)
+        # 1.Price > VWAP (above institutional average)
+        # 2.EMA 5 > EMA 13 (short-term uptrend)
+        # 3.Price > EMA 5 (momentum intact)
+        # 4.ADX > 25 (trend strength)
         if (data.price_above_vwap and 
-            data.ema_5 > data. ema_13 and 
-            data. price_above_ema5 and
+            data.ema_5 > data.ema_13 and 
+            data.price_above_ema5 and
             data.adx > 25):
             
             score = 3
@@ -221,19 +221,19 @@ class VWAPEMATrendStrategy(BaseStrategy):
                 score += 1
             
             # Bonus: RSI confirmation
-            if data. rsi_bullish_momentum:
+            if data.rsi_bullish_momentum:
                 score += 1
             
             return (
                 SignalType.BUY_CE,
-                f"Trend_Up (VWAP+ EMA+ ADX:{data. adx:.1f})",
+                f"Trend_Up (VWAP+ EMA+ ADX:{data.adx:.1f})",
                 min(5, score)
             )
         
         # BUY PE: Downtrend confirmation
         if (data.price_below_vwap and 
-            data.ema_5 < data. ema_13 and 
-            data. price_below_ema5 and
+            data.ema_5 < data.ema_13 and 
+            data.price_below_ema5 and
             data.adx > 25):
             
             score = 3
@@ -246,12 +246,12 @@ class VWAPEMATrendStrategy(BaseStrategy):
                 score += 1
             
             return (
-                SignalType. BUY_PE,
+                SignalType.BUY_PE,
                 f"Trend_Down (VWAP+ EMA+ ADX:{data.adx:.1f})",
                 min(5, score)
             )
         
-        return SignalType. NO_SIGNAL, "", 0
+        return SignalType.NO_SIGNAL, "", 0
 
 
 class MomentumBreakoutStrategy(BaseStrategy):
@@ -277,17 +277,17 @@ class MomentumBreakoutStrategy(BaseStrategy):
     
     def __init__(self, config, timeframe: str = "1minute"):
         super().__init__(config, timeframe)
-        self.min_candle_body = config. Patterns.MIN_CANDLE_BODY
+        self.min_candle_body = config.Patterns.MIN_CANDLE_BODY
     
     def _check_entry_conditions(self, data: MarketData, context:  MarketContext) -> Tuple[SignalType, str, int]:
         """
         Momentum-based entries with candle pattern confirmation.
         """
         # BUY CE:  Bullish momentum
-        # 1. Price > VWAP (bullish bias)
-        # 2. Green candle with large body
-        # 3. RSI in bullish momentum zone (55-75)
-        # 4. Volume confirmation (relative volume > 1.5)
+        # 1.Price > VWAP (bullish bias)
+        # 2.Green candle with large body
+        # 3.RSI in bullish momentum zone (55-75)
+        # 4.Volume confirmation (relative volume > 1.5)
         if (data.price_above_vwap and 
             data.is_green_candle and
             data.candle_body >= self.min_candle_body):
@@ -303,7 +303,7 @@ class MomentumBreakoutStrategy(BaseStrategy):
                 score += 1
             
             # Bonus: Volume spike
-            if data. volume_relative >= 1.5:
+            if data.volume_relative >= 1.5:
                 score += 1
             
             # Bonus: Regime alignment
@@ -323,7 +323,7 @@ class MomentumBreakoutStrategy(BaseStrategy):
             
             # RSI check
             if not (25 <= data.rsi <= 45):
-                return SignalType. NO_SIGNAL, "", 0
+                return SignalType.NO_SIGNAL, "", 0
             
             score = 3
             
@@ -336,7 +336,7 @@ class MomentumBreakoutStrategy(BaseStrategy):
             
             return (
                 SignalType.BUY_PE,
-                f"Momentum_Down (Body:{data. candle_body:. 1f} RSI:{data.rsi:.1f} Vol:{data.volume_relative:.1f}x)",
+                f"Momentum_Down (Body:{data.candle_body:.1f} RSI:{data.rsi:.1f} Vol:{data.volume_relative:.1f}x)",
                 min(5, score)
             )
         
@@ -348,7 +348,7 @@ class MomentumBreakoutStrategy(BaseStrategy):
 # ============================================================
 
 if __name__ == "__main__":
-    print("\n🔬 Testing Trend Strategies.. .\n")
+    print("\n🔬 Testing Trend Strategies...\n")
     
     # Mock config
     class MockConfig:
@@ -401,11 +401,11 @@ if __name__ == "__main__":
     print("=" * 50)
     print("Testing OriginalStrategy...")
     original = OriginalStrategy(MockConfig())
-    signal = original. check_entry(data, context)
+    signal = original.check_entry(data, context)
     if signal:
         print(f"Signal: {signal.signal_type.value}")
         print(f"Reason: {signal.reason}")
-        print(f"Strength: {signal.strength. value}")
+        print(f"Strength: {signal.strength.value}")
         print(f"Score: {signal.base_score}")
         print(f"Confluence: {signal.confluence_factors}")
     else:
@@ -415,7 +415,7 @@ if __name__ == "__main__":
     print("\n" + "=" * 50)
     print("Testing VWAPEMATrendStrategy...")
     vwap_ema = VWAPEMATrendStrategy(MockConfig())
-    signal = vwap_ema. check_entry(data, context)
+    signal = vwap_ema.check_entry(data, context)
     if signal:
         print(f"Signal: {signal.signal_type.value}")
         print(f"Reason: {signal.reason}")
@@ -430,7 +430,7 @@ if __name__ == "__main__":
     signal = momentum.check_entry(data, context)
     if signal:
         print(f"Signal: {signal.signal_type.value}")
-        print(f"Reason: {signal. reason}")
+        print(f"Reason: {signal.reason}")
         print(f"Strength: {signal.strength.value}")
     else:
         print("No signal generated")

@@ -1,6 +1,6 @@
 """
 DATA ENGINE
-Enhanced data pipeline that feeds both raw data and Market Intelligence. 
+Enhanced data pipeline that feeds both raw data and Market Intelligence.
 
 Upgrades from Experiment 4:
 - Integrates with MarketContext building
@@ -24,11 +24,11 @@ from dataclasses import dataclass
 try:
     from growwapi import GrowwAPI
 except ImportError:
-    print("⚠️ WARNING: 'growwapi' not found. Using mock mode.")
+    print("⚠️ WARNING: 'growwapi' not found.Using mock mode.")
     GrowwAPI = None
 
 # Add parent to path
-sys.path.append(os. path.dirname(os.path.dirname(os.path.abspath(__file__))))
+sys.path.append(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
 from config import BotConfig, get_timeframe_display_name
 
@@ -85,7 +85,7 @@ class DataEngine:
         self.option_expiry = option_expiry
         self.future_expiry = future_expiry
         self.fut_symbol = fut_symbol
-        self. timeframe = timeframe
+        self.timeframe = timeframe
         
         # === PUBLIC DATA (Strategies read these) ===
         self.timestamp:  Optional[datetime] = None
@@ -95,7 +95,7 @@ class DataEngine:
         self.fut_ltp: float = 0.0
         self.fut_open: float = 0.0
         self.fut_high: float = 0.0
-        self. fut_low: float = 0.0
+        self.fut_low: float = 0.0
         self.fut_close: float = 0.0
         
         # Indicators
@@ -119,7 +119,7 @@ class DataEngine:
         self.volume_relative:  float = 1.0
         
         # Market breadth
-        self. atm_strike: int = 0
+        self.atm_strike: int = 0
         self.pcr: float = 1.0
         self.total_ce_oi: int = 0
         self.total_pe_oi: int = 0
@@ -128,7 +128,7 @@ class DataEngine:
         self.strikes_data: Dict[int, StrikeOIData] = {}
         self.atm_ce_ltp: float = 0.0
         self.atm_pe_ltp:  float = 0.0
-        self. atm_iv: float = 0.0
+        self.atm_iv: float = 0.0
         
         # Opening range
         self.opening_range_high: float = 0.0
@@ -136,7 +136,7 @@ class DataEngine:
         self.opening_range_set: bool = False
         
         # === INTERNAL STATE ===
-        self.groww:  Optional[GrowwAPI] = None
+        self.groww: Optional[GrowwAPI] = None
         self.is_connected: bool = False
         
         # Candle history
@@ -147,7 +147,7 @@ class DataEngine:
         self.prev_pe_oi: Dict[int, int] = {}
         
         # Volume history
-        self. volume_history: deque[float] = deque(maxlen=20)
+        self.volume_history: deque[float] = deque(maxlen=20)
         
         # ADX components
         self.tr_history: deque[float] = deque(maxlen=30)
@@ -161,7 +161,7 @@ class DataEngine:
         self.active_monitoring_strikes: Set[int] = set()
         
         # Rate limiting
-        self. last_api_call: Dict[str, float] = {'spot': 0, 'future': 0, 'chain': 0}
+        self.last_api_call: Dict[str, float] = {'spot': 0, 'future': 0, 'chain': 0}
         
         # Update counter
         self.update_count:  int = 0
@@ -174,12 +174,12 @@ class DataEngine:
     def _connect(self):
         """Authenticates with the Groww API."""
         if GrowwAPI is None:
-            print(f"[{self. timeframe}] ⚠️ Running in MOCK mode (no API)")
+            print(f"[{self.timeframe}] ⚠️ Running in MOCK mode (no API)")
             return
         
         try: 
             print(f"[{self.timeframe}] 🔑 Authenticating...")
-            token = GrowwAPI.get_access_token(api_key=self. api_key, secret=self.api_secret)
+            token = GrowwAPI.get_access_token(api_key=self.api_key, secret=self.api_secret)
             self.groww = GrowwAPI(token)
             self.is_connected = True
             print(f"[{self.timeframe}] ✅ Connected to Groww API")
@@ -192,7 +192,7 @@ class DataEngine:
         try:
             date_str = datetime.now().strftime('%Y%m%d_%H%M%S')
             log_dir = BotConfig.get_log_paths()['engine_log']
-            fname = f"Engine_{get_timeframe_display_name(self. timeframe)}_{date_str}. csv"
+            fname = f"Engine_{get_timeframe_display_name(self.timeframe)}_{date_str}.csv"
             self.log_file = os.path.join(log_dir, fname)
             
             cols = [
@@ -209,41 +209,41 @@ class DataEngine:
     
     def update(self) -> bool:
         """
-        Main update method.  Fetches all data and calculates indicators.
+        Main update method. Fetches all data and calculates indicators.
         
         Returns: 
             True if update successful, False otherwise
         """
         self.update_count += 1
-        self.timestamp = datetime. now()
+        self.timestamp = datetime.now()
         
         try:
-            # 1. Fetch Spot data (for RSI, EMA)
+            # 1.Fetch Spot data (for RSI, EMA)
             self._rate_limit('spot')
             self._fetch_spot_data()
             
-            # 2. Fetch Future data (for VWAP, patterns)
+            # 2.Fetch Future data (for VWAP, patterns)
             self._rate_limit('future')
             self._fetch_future_data()
             
-            # 3. Calculate ATM strike
+            # 3.Calculate ATM strike
             if self.spot_ltp > 0:
                 self.atm_strike = round(self.spot_ltp / 50) * 50
             
-            # 4. Fetch Option chain
+            # 4.Fetch Option chain
             if self.atm_strike > 0:
                 self._rate_limit('chain')
                 self._fetch_option_chain()
             
-            # 5. Update opening range
+            # 5.Update opening range
             self._update_opening_range()
             
-            # 6. Log snapshot
+            # 6.Log snapshot
             self._log_snapshot()
             
             # Warmup check
-            if self. update_count >= 15:
-                self. warmup_complete = True
+            if self.update_count >= 15:
+                self.warmup_complete = True
             
             return True
             
@@ -254,11 +254,11 @@ class DataEngine:
     
     def register_active_strike(self, strike: int):
         """Adds a strike to the monitoring list."""
-        self. active_monitoring_strikes.add(int(strike))
+        self.active_monitoring_strikes.add(int(strike))
     
     def unregister_active_strike(self, strike: int):
         """Removes a strike from the monitoring list."""
-        self.active_monitoring_strikes. discard(int(strike))
+        self.active_monitoring_strikes.discard(int(strike))
     
     def get_option_price(self, strike:  int, option_type: str) -> float:
         """
@@ -274,18 +274,18 @@ class DataEngine:
         if strike in self.strikes_data:
             data = self.strikes_data[strike]
             if option_type == 'CE': 
-                return data. ce_ltp
+                return data.ce_ltp
             else: 
                 return data.pe_ltp
         return 0.0
     
     def get_strike_data(self, strike: int) -> Optional[StrikeOIData]: 
         """Gets full strike data."""
-        return self. strikes_data.get(strike)
+        return self.strikes_data.get(strike)
     
     def get_affordable_strike(self, option_type: str, max_cost: float) -> Optional[StrikeOIData]:
         """
-        Finds the best affordable strike. 
+        Finds the best affordable strike.
         
         Args:
             option_type: 'CE' or 'PE'
@@ -300,7 +300,7 @@ class DataEngine:
         if option_type == 'CE':
             candidates = [self.atm_strike, self.atm_strike + 50, self.atm_strike + 100]
         else: 
-            candidates = [self.atm_strike, self.atm_strike - 50, self. atm_strike - 100]
+            candidates = [self.atm_strike, self.atm_strike - 50, self.atm_strike - 100]
         
         for strike in candidates:
             if strike in self.strikes_data:
@@ -323,7 +323,7 @@ class DataEngine:
         if len(self.iv_history) < 20:
             return 50.0
         
-        current_iv = self. atm_iv
+        current_iv = self.atm_iv
         if current_iv <= 0:
             return 50.0
         
@@ -341,11 +341,11 @@ class DataEngine:
         
         try:
             start_dt = datetime.now() - timedelta(days=5)
-            end_dt = datetime. now()
+            end_dt = datetime.now()
             
             resp = self.groww.get_historical_candles(
                 "NSE", "CASH", "NSE-NIFTY",
-                start_dt. strftime("%Y-%m-%d %H:%M:%S"),
+                start_dt.strftime("%Y-%m-%d %H:%M:%S"),
                 end_dt.strftime("%Y-%m-%d %H:%M:%S"),
                 self.timeframe
             )
@@ -354,20 +354,20 @@ class DataEngine:
                 return
             
             df = pd.DataFrame(resp['candles'])
-            df. columns = ['t', 'o', 'h', 'l', 'c', 'v'][: len(df.columns)]
+            df.columns = ['t', 'o', 'h', 'l', 'c', 'v'][: len(df.columns)]
             
             # Update LTP
             self.spot_ltp = float(df['c'].iloc[-1])
             
             # Store candles
-            for _, row in df. tail(50).iterrows():
+            for _, row in df.tail(50).iterrows():
                 candle = CandleData(
                     timestamp=pd.to_datetime(row['t']),
                     open=float(row['o']),
                     high=float(row['h']),
                     low=float(row['l']),
                     close=float(row['c']),
-                    volume=float(row. get('v', 0))
+                    volume=float(row.get('v', 0))
                 )
                 self.candles.append(candle)
             
@@ -391,7 +391,7 @@ class DataEngine:
             resp = self.groww.get_historical_candles(
                 "NSE", "FNO", self.fut_symbol,
                 today_open.strftime("%Y-%m-%d %H:%M:%S"),
-                now. strftime("%Y-%m-%d %H:%M:%S"),
+                now.strftime("%Y-%m-%d %H:%M:%S"),
                 self.timeframe
             )
             
@@ -411,13 +411,13 @@ class DataEngine:
             # Volume
             if 'v' in df.columns:
                 self.current_volume = float(last_row['v'])
-                self.volume_history.append(self. current_volume)
+                self.volume_history.append(self.current_volume)
                 if len(self.volume_history) > 5:
                     self.avg_volume = sum(list(self.volume_history)[:-1]) / (len(self.volume_history) - 1)
-                    self.volume_relative = self.current_volume / self.avg_volume if self. avg_volume > 0 else 1.0
+                    self.volume_relative = self.current_volume / self.avg_volume if self.avg_volume > 0 else 1.0
             
             # Candle pattern
-            self. candle_body = abs(self.fut_close - self.fut_open)
+            self.candle_body = abs(self.fut_close - self.fut_open)
             self.candle_range = self.fut_high - self.fut_low
             self.is_green_candle = self.fut_close > self.fut_open
             
@@ -435,7 +435,7 @@ class DataEngine:
             return
         
         try:
-            chain = self.groww. get_option_chain("NSE", "NIFTY", self. option_expiry)
+            chain = self.groww.get_option_chain("NSE", "NIFTY", self.option_expiry)
             
             if not chain or 'strikes' not in chain: 
                 return
@@ -446,7 +446,7 @@ class DataEngine:
                 self.atm_strike + 50, self.atm_strike + 100, self.atm_strike + 150,
                 self.atm_strike - 50, self.atm_strike - 100, self.atm_strike - 150
             }
-            strikes_to_fetch. update(self.active_monitoring_strikes)
+            strikes_to_fetch.update(self.active_monitoring_strikes)
             
             # Process chain
             new_strikes_data:  Dict[int, StrikeOIData] = {}
@@ -484,7 +484,7 @@ class DataEngine:
                         pe_ltp=pe.get('ltp', 0.0),
                         ce_iv=ce_greeks.get('iv', 0.0),
                         pe_iv=pe_greeks.get('iv', 0.0),
-                        ce_delta=ce_greeks. get('delta', 0.0),
+                        ce_delta=ce_greeks.get('delta', 0.0),
                         pe_delta=pe_greeks.get('delta', 0.0)
                     )
                     
@@ -500,38 +500,38 @@ class DataEngine:
             
             # ATM data
             if self.atm_strike in self.strikes_data:
-                atm_data = self.strikes_data[self. atm_strike]
+                atm_data = self.strikes_data[self.atm_strike]
                 self.atm_ce_ltp = atm_data.ce_ltp
-                self. atm_pe_ltp = atm_data.pe_ltp
-                self.atm_iv = (atm_data. ce_iv + atm_data.pe_iv) / 2
+                self.atm_pe_ltp = atm_data.pe_ltp
+                self.atm_iv = (atm_data.ce_iv + atm_data.pe_iv) / 2
                 
                 if self.atm_iv > 0:
                     self.iv_history.append(self.atm_iv)
             
         except Exception as e: 
-            if self. update_count % 10 == 0:
+            if self.update_count % 10 == 0:
                 print(f"⚠️ Chain fetch error: {e}")
     
     # ==================== INDICATOR CALCULATIONS ====================
     
-    def _calculate_indicators(self, df: pd. DataFrame):
+    def _calculate_indicators(self, df: pd.DataFrame):
         """Calculates technical indicators."""
-        closes = df['c']. astype(float)
+        closes = df['c'].astype(float)
         highs = df['h'].astype(float)
-        lows = df['l']. astype(float)
+        lows = df['l'].astype(float)
         
         # EMAs
         if len(closes) >= 50:
-            self. ema_5 = float(closes.ewm(span=5, adjust=False).mean().iloc[-1])
+            self.ema_5 = float(closes.ewm(span=5, adjust=False).mean().iloc[-1])
             self.ema_13 = float(closes.ewm(span=13, adjust=False).mean().iloc[-1])
-            self. ema_21 = float(closes.ewm(span=21, adjust=False).mean().iloc[-1])
-            self.ema_50 = float(closes. ewm(span=50, adjust=False).mean().iloc[-1])
+            self.ema_21 = float(closes.ewm(span=21, adjust=False).mean().iloc[-1])
+            self.ema_50 = float(closes.ewm(span=50, adjust=False).mean().iloc[-1])
         
         # RSI
         if len(closes) > 14:
             delta = closes.diff()
-            gain = delta. where(delta > 0, 0.0).ewm(alpha=1/14, adjust=False).mean()
-            loss = (-delta. where(delta < 0, 0.0)).ewm(alpha=1/14, adjust=False).mean()
+            gain = delta.where(delta > 0, 0.0).ewm(alpha=1/14, adjust=False).mean()
+            loss = (-delta.where(delta < 0, 0.0)).ewm(alpha=1/14, adjust=False).mean()
             rs = gain / loss
             self.rsi = float(100 - (100 / (1 + rs)).iloc[-1])
         
@@ -547,7 +547,7 @@ class DataEngine:
             return
         
         # True Range
-        prev_close = closes. shift(1)
+        prev_close = closes.shift(1)
         tr1 = highs - lows
         tr2 = abs(highs - prev_close)
         tr3 = abs(lows - prev_close)
@@ -559,10 +559,10 @@ class DataEngine:
         
         # Directional Movement
         up_move = highs - highs.shift(1)
-        down_move = lows. shift(1) - lows
+        down_move = lows.shift(1) - lows
         
         plus_dm = up_move.where((up_move > down_move) & (up_move > 0), 0.0)
-        minus_dm = down_move. where((down_move > up_move) & (down_move > 0), 0.0)
+        minus_dm = down_move.where((down_move > up_move) & (down_move > 0), 0.0)
         
         # Smoothed
         atr_smooth = tr.ewm(span=period, adjust=False).mean()
@@ -575,15 +575,15 @@ class DataEngine:
         
         # DX and ADX
         di_sum = plus_di + minus_di
-        dx = 100 * abs(plus_di - minus_di) / di_sum. where(di_sum != 0, 1)
+        dx = 100 * abs(plus_di - minus_di) / di_sum.where(di_sum != 0, 1)
         adx = dx.ewm(span=period, adjust=False).mean()
         
-        self.adx = float(adx.iloc[-1]) if not pd.isna(adx. iloc[-1]) else 0.0
+        self.adx = float(adx.iloc[-1]) if not pd.isna(adx.iloc[-1]) else 0.0
     
     def _calculate_vwap(self, df:  pd.DataFrame):
         """Calculates VWAP."""
-        if 'v' not in df. columns or df['v'].sum() == 0:
-            self.vwap = float(df['c']. mean())
+        if 'v' not in df.columns or df['v'].sum() == 0:
+            self.vwap = float(df['c'].mean())
             return
         
         typical_price = (df['h'] + df['l'] + df['c']) / 3
@@ -598,7 +598,7 @@ class DataEngine:
         if self.opening_range_set: 
             return
         
-        current_time = datetime. now().time()
+        current_time = datetime.now().time()
         
         # Opening range:  9:15 - 9:30
         from datetime import time as dt_time
@@ -617,7 +617,7 @@ class DataEngine:
                     self.opening_range_low = min(self.opening_range_low, self.fut_low)
         else:
             # Range complete
-            if self. opening_range_high > 0:
+            if self.opening_range_high > 0:
                 self.opening_range_set = True
     
     # ==================== MOCK DATA (for testing) ====================
@@ -630,11 +630,11 @@ class DataEngine:
         self.spot_ltp = base + random.uniform(-10, 10)
         
         # Mock indicators
-        self. ema_5 = base + random.uniform(-5, 5)
-        self. ema_13 = base + random.uniform(-10, 10)
+        self.ema_5 = base + random.uniform(-5, 5)
+        self.ema_13 = base + random.uniform(-10, 10)
         self.ema_21 = base + random.uniform(-15, 15)
         self.ema_50 = base + random.uniform(-30, 30)
-        self.rsi = 50 + random. uniform(-20, 20)
+        self.rsi = 50 + random.uniform(-20, 20)
         self.adx = 20 + random.uniform(0, 20)
         self.atr = 40 + random.uniform(0, 20)
     
@@ -643,25 +643,25 @@ class DataEngine:
         import random
         
         self.fut_open = self.spot_ltp + random.uniform(-5, 5)
-        self.fut_high = self.fut_open + random. uniform(10, 30)
-        self.fut_low = self.fut_open - random. uniform(10, 30)
+        self.fut_high = self.fut_open + random.uniform(10, 30)
+        self.fut_low = self.fut_open - random.uniform(10, 30)
         self.fut_close = self.fut_open + random.uniform(-20, 20)
         self.fut_ltp = self.fut_close
         
         self.candle_body = abs(self.fut_close - self.fut_open)
-        self.candle_range = self.fut_high - self. fut_low
+        self.candle_range = self.fut_high - self.fut_low
         self.is_green_candle = self.fut_close > self.fut_open
         
         self.vwap = (self.fut_high + self.fut_low + self.fut_close) / 3
         
         self.current_volume = 50000 + random.randint(0, 50000)
-        self.volume_relative = 0.8 + random.uniform(0, 1. 5)
+        self.volume_relative = 0.8 + random.uniform(0, 1.5)
     
     def _generate_mock_option_chain(self):
         """Generates mock option chain."""
         import random
         
-        self. atm_strike = round(self.spot_ltp / 50) * 50
+        self.atm_strike = round(self.spot_ltp / 50) * 50
         
         for offset in [-150, -100, -50, 0, 50, 100, 150]: 
             strike = self.atm_strike + offset
@@ -673,35 +673,35 @@ class DataEngine:
                 ce_oi_change=random.randint(-10000, 10000),
                 pe_oi_change=random.randint(-10000, 10000),
                 ce_ltp=max(5, 100 - offset * 0.5 + random.uniform(-10, 10)),
-                pe_ltp=max(5, 100 + offset * 0.5 + random. uniform(-10, 10)),
+                pe_ltp=max(5, 100 + offset * 0.5 + random.uniform(-10, 10)),
                 ce_iv=15 + random.uniform(-3, 3),
-                pe_iv=15 + random. uniform(-3, 3),
+                pe_iv=15 + random.uniform(-3, 3),
                 ce_delta=0.5 - offset * 0.005,
                 pe_delta=-0.5 - offset * 0.005
             )
         
-        self.total_ce_oi = sum(s. ce_oi for s in self.strikes_data.values())
-        self.total_pe_oi = sum(s. pe_oi for s in self.strikes_data.values())
-        self.pcr = self.total_pe_oi / self. total_ce_oi if self.total_ce_oi > 0 else 1.0
+        self.total_ce_oi = sum(s.ce_oi for s in self.strikes_data.values())
+        self.total_pe_oi = sum(s.pe_oi for s in self.strikes_data.values())
+        self.pcr = self.total_pe_oi / self.total_ce_oi if self.total_ce_oi > 0 else 1.0
         
         if self.atm_strike in self.strikes_data:
             atm = self.strikes_data[self.atm_strike]
             self.atm_ce_ltp = atm.ce_ltp
             self.atm_pe_ltp = atm.pe_ltp
-            self. atm_iv = (atm.ce_iv + atm.pe_iv) / 2
+            self.atm_iv = (atm.ce_iv + atm.pe_iv) / 2
     
     # ==================== UTILITIES ====================
     
     def _rate_limit(self, api_type: str):
         """Simple rate limiting."""
         limits = {
-            'spot': BotConfig. RATE_LIMIT_SPOT,
-            'future': BotConfig. RATE_LIMIT_FUTURE,
-            'chain': BotConfig. RATE_LIMIT_CHAIN
+            'spot': BotConfig.RATE_LIMIT_SPOT,
+            'future': BotConfig.RATE_LIMIT_FUTURE,
+            'chain': BotConfig.RATE_LIMIT_CHAIN
         }
         
         now = time.time()
-        elapsed = now - self. last_api_call. get(api_type, 0)
+        elapsed = now - self.last_api_call.get(api_type, 0)
         wait = limits.get(api_type, 0.5) - elapsed
         
         if wait > 0:
@@ -721,12 +721,12 @@ class DataEngine:
                 f"{self.fut_ltp:.2f}",
                 f"{self.rsi:.1f}",
                 f"{self.adx:.1f}",
-                f"{self.atr:. 1f}",
-                f"{self. vwap:.2f}",
+                f"{self.atr:.1f}",
+                f"{self.vwap:.2f}",
                 f"{self.ema_5:.2f}",
                 f"{self.ema_13:.2f}",
                 str(self.atm_strike),
-                f"{self. pcr:.2f}",
+                f"{self.pcr:.2f}",
                 f"{self.volume_relative:.2f}"
             ]
             
@@ -745,7 +745,7 @@ class DataEngine:
 # ============================================================
 
 if __name__ == "__main__":
-    print("\n🔬 Testing Data Engine.. .\n")
+    print("\n🔬 Testing Data Engine...\n")
     
     engine = DataEngine(
         api_key="test",
@@ -762,8 +762,8 @@ if __name__ == "__main__":
         print(f"Update {i+1}:  Spot={engine.spot_ltp:.2f}, RSI={engine.rsi:.1f}, "
               f"ADX={engine.adx:.1f}, ATM={engine.atm_strike}")
     
-    print(f"\nOpening Range: {engine.opening_range_low:. 2f} - {engine.opening_range_high:.2f}")
-    print(f"PCR: {engine. pcr:.2f}")
-    print(f"Volume Relative: {engine. volume_relative:.2f}x")
+    print(f"\nOpening Range: {engine.opening_range_low:.2f} - {engine.opening_range_high:.2f}")
+    print(f"PCR: {engine.pcr:.2f}")
+    print(f"Volume Relative: {engine.volume_relative:.2f}x")
     
     print("\n✅ Data Engine Test Complete!")

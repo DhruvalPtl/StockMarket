@@ -1,13 +1,13 @@
 """
 SIGNAL AGGREGATOR
-Combines signals from multiple strategies into actionable trades. 
+Combines signals from multiple strategies into actionable trades.
 
 Key Functions:
-1. Collects signals from all active strategies
-2. Calculates confluence score (how many strategies agree)
-3. Filters weak signals
-4. Prevents conflicting trades (CE and PE at same time)
-5. Prioritizes best signals when multiple exist
+1.Collects signals from all active strategies
+2.Calculates confluence score (how many strategies agree)
+3.Filters weak signals
+4.Prevents conflicting trades (CE and PE at same time)
+5.Prioritizes best signals when multiple exist
 
 This is the "voting system" where strategies vote on direction.
 """
@@ -20,10 +20,10 @@ from enum import Enum
 
 import sys
 import os
-sys.path.append(os.path.dirname(os.path. dirname(os.path.abspath(__file__))))
+sys.path.append(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
 from strategies.base_strategy import StrategySignal, SignalType, SignalStrength
-from market_intelligence. market_context import MarketContext, MarketBias, MarketRegime
+from market_intelligence.market_context import MarketContext, MarketBias, MarketRegime
 
 
 class TradeDecision(Enum):
@@ -36,7 +36,7 @@ class TradeDecision(Enum):
 @dataclass
 class AggregatedSignal:
     """
-    Combined signal from multiple strategies. 
+    Combined signal from multiple strategies.
     This is what gets passed to the execution layer.
     """
     # Decision
@@ -67,12 +67,12 @@ class AggregatedSignal:
         """Convert to dictionary for logging."""
         return {
             'decision': self.decision.value,
-            'direction': self. direction.value if self.direction else None,
+            'direction': self.direction.value if self.direction else None,
             'confluence':  self.confluence_score,
             'strategies': self.agreeing_strategies,
             'size_mult': self.suggested_size_multiplier,
-            'skip_reason': self. skip_reason,
-            'timestamp': self.timestamp. strftime("%H:%M:%S")
+            'skip_reason': self.skip_reason,
+            'timestamp': self.timestamp.strftime("%H:%M:%S")
         }
 
 
@@ -97,12 +97,12 @@ class SignalAggregator:
         self.config = config
         
         # Confluence thresholds
-        self.min_score_high = config. Confluence.MIN_SCORE_HIGH_CONFIDENCE
+        self.min_score_high = config.Confluence.MIN_SCORE_HIGH_CONFIDENCE
         self.min_score_medium = config.Confluence.MIN_SCORE_MEDIUM_CONFIDENCE
-        self. min_score_low = config.Confluence.MIN_SCORE_LOW_CONFIDENCE
+        self.min_score_low = config.Confluence.MIN_SCORE_LOW_CONFIDENCE
         
         # Weights
-        self.weights = config.Confluence. WEIGHTS
+        self.weights = config.Confluence.WEIGHTS
         
         # Signal history for analysis
         self.signal_history: List[AggregatedSignal] = []
@@ -127,7 +127,7 @@ class SignalAggregator:
         self.signals_processed += 1
         
         # Filter out NO_SIGNAL
-        active_signals = [s for s in signals if s.signal_type != SignalType. NO_SIGNAL]
+        active_signals = [s for s in signals if s.signal_type != SignalType.NO_SIGNAL]
         
         # No signals case
         if not active_signals:
@@ -135,7 +135,7 @@ class SignalAggregator:
         
         # Separate by direction
         ce_signals = [s for s in active_signals if s.signal_type == SignalType.BUY_CE]
-        pe_signals = [s for s in active_signals if s.signal_type == SignalType. BUY_PE]
+        pe_signals = [s for s in active_signals if s.signal_type == SignalType.BUY_PE]
         
         # Check for conflict
         if ce_signals and pe_signals:
@@ -157,36 +157,36 @@ class SignalAggregator:
         # Calculate base confluence score
         confluence_score = 0
         
-        # 1. Strategy count (each strategy = 1 point)
+        # 1.Strategy count (each strategy = 1 point)
         confluence_score += len(signals) * self.weights['strategy_signal']
         
-        # 2. Sum of individual signal scores
+        # 2.Sum of individual signal scores
         for signal in signals: 
-            if signal.strength == SignalStrength. STRONG:
+            if signal.strength == SignalStrength.STRONG:
                 confluence_score += 1
         
-        # 3. Context alignment bonuses
+        # 3.Context alignment bonuses
         # Regime alignment
-        is_bullish = direction == SignalType. BUY_CE
+        is_bullish = direction == SignalType.BUY_CE
         regime_aligned = (
-            (is_bullish and context.regime == MarketRegime. TRENDING_UP) or
-            (not is_bullish and context.regime == MarketRegime. TRENDING_DOWN)
+            (is_bullish and context.regime == MarketRegime.TRENDING_UP) or
+            (not is_bullish and context.regime == MarketRegime.TRENDING_DOWN)
         )
         if regime_aligned: 
             confluence_score += self.weights['regime_alignment']
         
         # Bias alignment
         bias_aligned = (
-            (is_bullish and context.bias in [MarketBias.BULLISH, MarketBias. STRONG_BULLISH]) or
-            (not is_bullish and context.bias in [MarketBias. BEARISH, MarketBias.STRONG_BEARISH])
+            (is_bullish and context.bias in [MarketBias.BULLISH, MarketBias.STRONG_BULLISH]) or
+            (not is_bullish and context.bias in [MarketBias.BEARISH, MarketBias.STRONG_BEARISH])
         )
         if bias_aligned: 
             confluence_score += self.weights['bias_alignment']
         
         # Order flow confirmation
         order_flow_aligned = (
-            (is_bullish and context.order_flow. smart_money_direction == "BULLISH") or
-            (not is_bullish and context.order_flow. smart_money_direction == "BEARISH")
+            (is_bullish and context.order_flow.smart_money_direction == "BULLISH") or
+            (not is_bullish and context.order_flow.smart_money_direction == "BEARISH")
         )
         if order_flow_aligned:
             confluence_score += self.weights['order_flow_confirmation']
@@ -195,19 +195,19 @@ class SignalAggregator:
         if context.order_flow.volume_state in ["SPIKE", "HIGH"]:
             confluence_score += self.weights['volume_confirmation']
         
-        # 4. Determine decision
+        # 4.Determine decision
         decision, skip_reason = self._determine_decision(confluence_score, signals, context)
         
-        # 5. Get best signal (highest individual score)
-        best_signal = max(signals, key=lambda s: s. base_score)
+        # 5.Get best signal (highest individual score)
+        best_signal = max(signals, key=lambda s: s.base_score)
         
-        # 6. Calculate size multiplier
+        # 6.Calculate size multiplier
         size_mult = self._calculate_size_multiplier(confluence_score, context)
         
-        # 7. Get exit parameters
+        # 7.Get exit parameters
         target, stop = self._get_exit_params(signals, context)
         
-        # 8. Create aggregated signal
+        # 8.Create aggregated signal
         result = AggregatedSignal(
             decision=decision,
             direction=direction if decision == TradeDecision.EXECUTE else None,
@@ -228,7 +228,7 @@ class SignalAggregator:
         else: 
             self.signals_skipped += 1
         
-        self.signal_history. append(result)
+        self.signal_history.append(result)
         
         return result
     
@@ -236,13 +236,13 @@ class SignalAggregator:
                          pe_signals: List[StrategySignal],
                          context:  MarketContext) -> AggregatedSignal:
         """
-        Resolves conflicting CE and PE signals. 
+        Resolves conflicting CE and PE signals.
         
         Resolution methods:
-        1. Count:  More signals win
-        2. Quality: Higher total score wins
-        3. Context: Bias breaks the tie
-        4. Skip: If still unclear
+        1.Count:  More signals win
+        2.Quality: Higher total score wins
+        3.Context: Bias breaks the tie
+        4.Skip: If still unclear
         """
         # Method 1: Count
         if len(ce_signals) > len(pe_signals) + 1:
@@ -260,9 +260,9 @@ class SignalAggregator:
             return self._aggregate_direction(pe_signals, SignalType.BUY_PE, context)
         
         # Method 3: Context bias
-        if context.bias in [MarketBias. STRONG_BULLISH, MarketBias. BULLISH]:
+        if context.bias in [MarketBias.STRONG_BULLISH, MarketBias.BULLISH]:
             return self._aggregate_direction(ce_signals, SignalType.BUY_CE, context)
-        if context.bias in [MarketBias. STRONG_BEARISH, MarketBias.BEARISH]:
+        if context.bias in [MarketBias.STRONG_BEARISH, MarketBias.BEARISH]:
             return self._aggregate_direction(pe_signals, SignalType.BUY_PE, context)
         
         # Method 4: Skip - too unclear
@@ -274,20 +274,20 @@ class SignalAggregator:
     def _determine_decision(self, score: int, signals:  List[StrategySignal],
                            context:  MarketContext) -> Tuple[TradeDecision, str]: 
         """
-        Determines whether to execute based on confluence score. 
+        Determines whether to execute based on confluence score.
         """
         # Check minimum threshold
         if score < self.min_score_low:
-            return TradeDecision. SKIP, f"Low confluence ({score} < {self.min_score_low})"
+            return TradeDecision.SKIP, f"Low confluence ({score} < {self.min_score_low})"
         
         # Check market conditions
         if not context.is_tradeable():
             return TradeDecision.SKIP, "Market not tradeable"
         
         # High volatility caution
-        if context.volatility_state. value == "EXTREME":
+        if context.volatility_state.value == "EXTREME":
             if score < self.min_score_high:
-                return TradeDecision. SKIP, "Extreme volatility requires high confluence"
+                return TradeDecision.SKIP, "Extreme volatility requires high confluence"
         
         # Lunch session caution
         if context.time_window.value == "LUNCH_SESSION":
@@ -295,7 +295,7 @@ class SignalAggregator:
                 return TradeDecision.SKIP, "Lunch session requires medium confluence"
         
         # All checks passed
-        return TradeDecision. EXECUTE, ""
+        return TradeDecision.EXECUTE, ""
     
     def _calculate_size_multiplier(self, score: int, context: MarketContext) -> float:
         """
@@ -331,8 +331,8 @@ class SignalAggregator:
     
     def _summarize_context(self, context: MarketContext) -> str:
         """Creates a brief context summary string."""
-        return (f"{context.regime.value}|{context.bias. value}|"
-                f"{context. time_window.value}|ADX:{context.regime_strength:. 0f}")
+        return (f"{context.regime.value}|{context.bias.value}|"
+                f"{context.time_window.value}|ADX:{context.regime_strength:.0f}")
     
     def _create_skip_signal(self, reason: str, context:  MarketContext) -> AggregatedSignal:
         """Creates a SKIP decision signal."""
@@ -358,13 +358,13 @@ class SignalAggregator:
         return {
             'processed':  self.signals_processed,
             'executed': self.signals_executed,
-            'skipped': self. signals_skipped,
+            'skipped': self.signals_skipped,
             'execution_rate': (self.signals_executed / total * 100) if total > 0 else 0
         }
     
     def print_decision(self, agg_signal: AggregatedSignal):
         """Prints a formatted decision summary."""
-        if agg_signal. decision == TradeDecision.EXECUTE: 
+        if agg_signal.decision == TradeDecision.EXECUTE: 
             icon = "🟢"
             direction = agg_signal.direction.value
         else:
@@ -374,11 +374,11 @@ class SignalAggregator:
         print(f"\n{icon} SIGNAL AGGREGATOR DECISION")
         print(f"{'─'*40}")
         print(f"Direction:     {direction}")
-        print(f"Confluence:   {agg_signal. confluence_score}")
+        print(f"Confluence:   {agg_signal.confluence_score}")
         print(f"Strategies:   {', '.join(agg_signal.agreeing_strategies) or 'None'}")
-        print(f"Size Mult:    {agg_signal.suggested_size_multiplier:. 2f}x")
+        print(f"Size Mult:    {agg_signal.suggested_size_multiplier:.2f}x")
         print(f"Context:      {agg_signal.market_context_summary}")
-        if agg_signal. skip_reason:
+        if agg_signal.skip_reason:
             print(f"Skip Reason:  {agg_signal.skip_reason}")
         print(f"{'─'*40}\n")
 
@@ -388,7 +388,7 @@ class SignalAggregator:
 # ============================================================
 
 if __name__ == "__main__":
-    print("\n🔬 Testing Signal Aggregator.. .\n")
+    print("\n🔬 Testing Signal Aggregator...\n")
     
     # Mock config
     class MockConfig:
@@ -419,7 +419,7 @@ if __name__ == "__main__":
     # Create mock signals
     signal1 = StrategySignal(
         signal_type=SignalType.BUY_CE,
-        strength=SignalStrength. STRONG,
+        strength=SignalStrength.STRONG,
         reason="Test signal 1",
         strategy_name="Original",
         timeframe="1minute",
@@ -431,7 +431,7 @@ if __name__ == "__main__":
     
     signal2 = StrategySignal(
         signal_type=SignalType.BUY_CE,
-        strength=SignalStrength. MODERATE,
+        strength=SignalStrength.MODERATE,
         reason="Test signal 2",
         strategy_name="EMA_Crossover",
         timeframe="1minute",
@@ -443,7 +443,7 @@ if __name__ == "__main__":
     
     signal3 = StrategySignal(
         signal_type=SignalType.BUY_CE,
-        strength=SignalStrength. MODERATE,
+        strength=SignalStrength.MODERATE,
         reason="Test signal 3",
         strategy_name="Order_Flow",
         timeframe="1minute",
@@ -455,7 +455,7 @@ if __name__ == "__main__":
     
     # Create context
     context = MarketContextBuilder()\
-        .set_regime(MarketRegime. TRENDING_UP, 32, 15)\
+        .set_regime(MarketRegime.TRENDING_UP, 32, 15)\
         .set_bias(MarketBias.BULLISH, 45)\
         .set_time_window(TimeWindow.MORNING_SESSION, 280, False)\
         .set_volatility(VolatilityState.NORMAL, 45, 50, 50)\
@@ -487,5 +487,5 @@ if __name__ == "__main__":
     result2 = aggregator.aggregate([signal1, signal2, signal_pe], context)
     aggregator.print_decision(result2)
     
-    print(f"\nStats: {aggregator. get_stats()}")
+    print(f"\nStats: {aggregator.get_stats()}")
     print("\n✅ Signal Aggregator Test Complete!")

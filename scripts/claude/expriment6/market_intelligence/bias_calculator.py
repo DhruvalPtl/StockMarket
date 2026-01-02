@@ -19,7 +19,7 @@ from enum import Enum
 
 import sys
 import os
-sys.path.append(os.path.dirname(os.path. dirname(os.path.abspath(__file__))))
+sys.path.append(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
 from market_intelligence.market_context import MarketBias
 
@@ -49,7 +49,7 @@ class BiasState:
 
 class BiasCalculator:
     """
-    Calculates market directional bias by combining multiple factors. 
+    Calculates market directional bias by combining multiple factors.
     
     Each factor contributes to a total score from -100 to +100:
     - Above +50: STRONG_BULLISH
@@ -63,23 +63,23 @@ class BiasCalculator:
         self.config = config
         
         # Thresholds from config
-        self. premium_strong_bull = config.Bias.PREMIUM_STRONG_BULLISH
-        self. premium_bull = config.Bias. PREMIUM_BULLISH
-        self.premium_neutral = config. Bias.PREMIUM_NEUTRAL_LOW
-        self.premium_bear = config. Bias.PREMIUM_BEARISH
+        self.premium_strong_bull = config.Bias.PREMIUM_STRONG_BULLISH
+        self.premium_bull = config.Bias.PREMIUM_BULLISH
+        self.premium_neutral = config.Bias.PREMIUM_NEUTRAL_LOW
+        self.premium_bear = config.Bias.PREMIUM_BEARISH
         
-        self.pcr_bullish = config. Bias.PCR_BULLISH
-        self.pcr_bearish = config. Bias.PCR_BEARISH
+        self.pcr_bullish = config.Bias.PCR_BULLISH
+        self.pcr_bearish = config.Bias.PCR_BEARISH
         
         # EMA periods to track
-        self. ema_periods = config.Bias.EMA_PERIODS  # [5, 13, 21, 50]
+        self.ema_periods = config.Bias.EMA_PERIODS  # [5, 13, 21, 50]
         
         # Data storage
-        self. closes = deque(maxlen=100)
-        self. ema_values:  Dict[int, float] = {}  # period -> current EMA value
+        self.closes = deque(maxlen=100)
+        self.ema_values:  Dict[int, float] = {}  # period -> current EMA value
         
         # Score history for smoothing
-        self. score_history = deque(maxlen=10)
+        self.score_history = deque(maxlen=10)
         
         # Weights for each component (total = 100)
         self.weights = {
@@ -91,13 +91,13 @@ class BiasCalculator:
         }
         
         # Current state
-        self.current_bias = MarketBias. NEUTRAL
-        self. warmup_complete = False
+        self.current_bias = MarketBias.NEUTRAL
+        self.warmup_complete = False
 
     def update(self, spot:  float, future: float, vwap: float, 
                pcr: float, rsi: float) -> BiasState: 
         """
-        Main update method. Call with each data refresh.
+        Main update method.Call with each data refresh.
         
         Args:
             spot: Current spot price
@@ -110,7 +110,7 @@ class BiasCalculator:
             BiasState with current analysis
         """
         # Store close for EMA
-        self.closes. append(spot)
+        self.closes.append(spot)
         
         # Update EMAs
         self._update_emas()
@@ -127,7 +127,7 @@ class BiasCalculator:
         
         # Combine into total score
         total_score = (
-            premium_score * self. weights['premium'] / 100 +
+            premium_score * self.weights['premium'] / 100 +
             ema_score * self.weights['ema'] / 100 +
             pcr_score * self.weights['pcr'] / 100 +
             vwap_score * self.weights['vwap'] / 100 +
@@ -135,7 +135,7 @@ class BiasCalculator:
         )
         
         # Smooth score using history
-        self.score_history. append(total_score)
+        self.score_history.append(total_score)
         smoothed_score = sum(self.score_history) / len(self.score_history)
         
         # Determine bias from score
@@ -174,22 +174,22 @@ class BiasCalculator:
         
         close = self.closes[-1]
         
-        for period in self. ema_periods: 
+        for period in self.ema_periods: 
             if len(self.closes) < period:
                 continue
             
             if period not in self.ema_values:
                 # Initialize with SMA
-                self. ema_values[period] = sum(list(self.closes)[-period:]) / period
+                self.ema_values[period] = sum(list(self.closes)[-period:]) / period
             else: 
                 # EMA formula
                 multiplier = 2 / (period + 1)
-                self. ema_values[period] = (close * multiplier + 
+                self.ema_values[period] = (close * multiplier + 
                                            self.ema_values[period] * (1 - multiplier))
 
     def _score_premium(self, premium: float) -> float:
         """
-        Scores futures premium. 
+        Scores futures premium.
         
         High premium = Bullish (traders paying more for futures)
         Discount = Bearish (futures cheaper than spot)
@@ -200,13 +200,13 @@ class BiasCalculator:
             return 100
         elif premium >= self.premium_bull:
             # Scale from 50 to 100
-            return 50 + (premium - self.premium_bull) / (self.premium_strong_bull - self. premium_bull) * 50
-        elif premium >= self. premium_neutral: 
+            return 50 + (premium - self.premium_bull) / (self.premium_strong_bull - self.premium_bull) * 50
+        elif premium >= self.premium_neutral: 
             # Scale from 0 to 50
             return (premium - self.premium_neutral) / (self.premium_bull - self.premium_neutral) * 50
         elif premium >= self.premium_bear:
             # Scale from -50 to 0
-            return (premium - self. premium_bear) / (self.premium_neutral - self.premium_bear) * 50 - 50
+            return (premium - self.premium_bear) / (self.premium_neutral - self.premium_bear) * 50 - 50
         else:
             # Strong bearish
             return max(-100, -50 - abs(premium - self.premium_bear))
@@ -224,7 +224,7 @@ class BiasCalculator:
             return 0, 'MIXED'
         
         # Get EMAs in order
-        emas = [self.ema_values. get(p, 0) for p in self. ema_periods]
+        emas = [self.ema_values.get(p, 0) for p in self.ema_periods]
         
         if 0 in emas: 
             return 0, 'MIXED'
@@ -271,7 +271,7 @@ class BiasCalculator:
         High PCR = Bullish (more puts being written = support)
         Low PCR = Bearish (more calls being written = resistance)
         
-        This is CONTRARIAN logic - writers are usually right. 
+        This is CONTRARIAN logic - writers are usually right.
         
         Returns: -100 to +100
         """
@@ -310,7 +310,7 @@ class BiasCalculator:
         distance_pct = (distance / vwap) * 100
         
         # Determine position
-        if distance_pct > 0. 2: 
+        if distance_pct > 0.2: 
             position = 'ABOVE'
         elif distance_pct < -0.2:
             position = 'BELOW'
@@ -354,11 +354,11 @@ class BiasCalculator:
     def _score_to_bias(self, score: float) -> MarketBias: 
         """Converts numeric score to MarketBias enum."""
         if score >= 50:
-            return MarketBias. STRONG_BULLISH
+            return MarketBias.STRONG_BULLISH
         elif score >= 20:
             return MarketBias.BULLISH
         elif score >= -20:
-            return MarketBias. NEUTRAL
+            return MarketBias.NEUTRAL
         elif score >= -50:
             return MarketBias.BEARISH
         else: 
@@ -395,7 +395,7 @@ class BiasCalculator:
 
     def get_ema_values(self) -> Dict[int, float]: 
         """Returns current EMA values."""
-        return self. ema_values.copy()
+        return self.ema_values.copy()
 
     def is_ready(self) -> bool:
         """Checks if calculator has enough data."""
@@ -416,7 +416,7 @@ class BiasCalculator:
 # ============================================================
 
 if __name__ == "__main__": 
-    print("\n🔬 Testing Bias Calculator.. .\n")
+    print("\n🔬 Testing Bias Calculator...\n")
     
     # Mock config
     class MockConfig:
@@ -447,11 +447,11 @@ if __name__ == "__main__":
     print(f"\nBias: {state.bias.value}")
     print(f"Score: {state.score:.1f}")
     print(f"\nComponent Scores:")
-    print(f"  Premium: {state. premium_score:.1f} (Premium: {state.futures_premium:.1f})")
+    print(f"  Premium: {state.premium_score:.1f} (Premium: {state.futures_premium:.1f})")
     print(f"  EMA:      {state.ema_score:.1f} ({state.ema_alignment})")
-    print(f"  PCR:     {state.pcr_score:.1f} (PCR: {state.pcr:. 2f})")
-    print(f"  VWAP:    {state. vwap_score:.1f} ({state.price_vs_vwap})")
-    print(f"  RSI:     {state. rsi_score:. 1f} (RSI: {state. rsi:.1f})")
+    print(f"  PCR:     {state.pcr_score:.1f} (PCR: {state.pcr:.2f})")
+    print(f"  VWAP:    {state.vwap_score:.1f} ({state.price_vs_vwap})")
+    print(f"  RSI:     {state.rsi_score:.1f} (RSI: {state.rsi:.1f})")
     print(f"\nConfidence: {state.confidence:.0f}%")
     
     print("\n" + "="*50)
@@ -469,8 +469,8 @@ if __name__ == "__main__":
         
         state = calc.update(spot, future, vwap, pcr, rsi)
     
-    print(f"\nBias: {state. bias.value}")
-    print(f"Score: {state. score:.1f}")
-    print(f"Confidence: {state. confidence:.0f}%")
+    print(f"\nBias: {state.bias.value}")
+    print(f"Score: {state.score:.1f}")
+    print(f"Confidence: {state.confidence:.0f}%")
     
     print("\n✅ Bias Calculator Test Complete!")

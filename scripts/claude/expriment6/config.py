@@ -1,7 +1,7 @@
 """
 EXPERIMENT 6 - CONFIGURATION
 Enhanced configuration with Market Intelligence parameters.
-All settings centralized here. 
+All settings centralized here.
 """
 
 import os
@@ -12,11 +12,11 @@ from typing import List, Dict
 
 class BotConfig:
     """
-    Central Configuration for Experiment 6 - Intelligent Trading Bot. 
+    Central Configuration for Experiment 6 - Intelligent Trading Bot.
     """
 
     # ============================================================
-    # 1. API CREDENTIALS & CONNECTION
+    # 1.API CREDENTIALS & CONNECTION
     # ============================================================
     API_KEY = "eyJraWQiOiJaTUtjVXciLCJhbGciOiJFUzI1NiJ9.eyJleHAiOjI1NTQ1MzcwMzEsImlhdCI6MTc2NjEzNzAzMSwibmJmIjoxNzY2MTM3MDMxLCJzdWIiOiJ7XCJ0b2tlblJlZklkXCI6XCJkYjY5YTI4MS04YzVkLTRhZDMtYTYwMy1iMWRkZjlm[...]"
     API_SECRET = "cE#YaAvu27#kS)axpmB1p#4kKlvv7%ef"
@@ -27,13 +27,13 @@ class BotConfig:
     RATE_LIMIT_CHAIN = 1.0
 
     # ============================================================
-    # 2. CONTRACT DETAILS
+    # 2.CONTRACT DETAILS
     # ============================================================
     OPTION_EXPIRY = "2026-01-06"      # Weekly options expiry
     FUTURE_EXPIRY = "2026-01-27"      # Monthly futures expiry
     
     # ============================================================
-    # 3. TIMEFRAMES & STRATEGIES
+    # 3.TIMEFRAMES & STRATEGIES
     # ============================================================
     TIMEFRAMES = ["1minute", "2minute", "3minute", "5minute"]
     
@@ -54,7 +54,7 @@ class BotConfig:
     STRATEGIES_TO_RUN = ALL_STRATEGIES
     
     # ============================================================
-    # 4. MARKET REGIME SETTINGS (NEW)
+    # 4.MARKET REGIME SETTINGS (NEW)
     # ============================================================
     class Regime:
         # ADX thresholds for trend detection
@@ -71,7 +71,7 @@ class BotConfig:
         REGIME_CONFIRMATION_CANDLES = 3
         
     # ============================================================
-    # 5. BIAS DETECTION SETTINGS (NEW)
+    # 5.BIAS DETECTION SETTINGS (NEW)
     # ============================================================
     class Bias: 
         # Futures Premium
@@ -88,7 +88,7 @@ class BotConfig:
         PCR_BEARISH = 0.8                # High call writing = bearish
         
     # ============================================================
-    # 6. ORDER FLOW SETTINGS (NEW)
+    # 6.ORDER FLOW SETTINGS (NEW)
     # ============================================================
     class OrderFlow: 
         # OI Change thresholds
@@ -103,12 +103,12 @@ class BotConfig:
         OI_LOOKBACK_PERIODS = 5          # Compare with 5 periods ago
         
     # ============================================================
-    # 7. LIQUIDITY MAPPING SETTINGS (NEW)
+    # 7.LIQUIDITY MAPPING SETTINGS (NEW)
     # ============================================================
     class Liquidity:
         # Key level detection
         SWING_LOOKBACK = 10              # Candles to find swing H/L
-        ROUND_NUMBER_INTERVAL = 100      # 24000, 24100, 24200... 
+        ROUND_NUMBER_INTERVAL = 100      # 24000, 24100, 24200...
         
         # Max Pain calculation
         MAX_PAIN_STRIKE_RANGE = 500      # ±500 points from ATM
@@ -117,7 +117,7 @@ class BotConfig:
         LEVEL_TOUCH_THRESHOLD = 3        # 3 touches = strong level
         
     # ============================================================
-    # 8. SIGNAL CONFLUENCE SETTINGS (NEW)
+    # 8.SIGNAL CONFLUENCE SETTINGS (NEW)
     # ============================================================
     class Confluence:
         # Minimum score to take trade
@@ -137,7 +137,7 @@ class BotConfig:
         }
         
     # ============================================================
-    # 9. RISK MANAGEMENT (ENHANCED)
+    # 9.RISK MANAGEMENT (ENHANCED)
     # ============================================================
     class Risk:
         # Capital
@@ -156,12 +156,12 @@ class BotConfig:
         MAX_DAILY_LOSS_ACTION = "LOG"    # "HALT" or "LOG"
         
         # Costs
-        BROKERAGE_PER_ORDER = 20. 0
+        BROKERAGE_PER_ORDER = 20.0
         TAXES_PER_TRADE = 15.0
         SLIPPAGE_POINTS = 1
         
     # ============================================================
-    # 10. EXIT RULES (ENHANCED)
+    # 10.EXIT RULES (ENHANCED)
     # ============================================================
     class Exit:
         # Default Fixed Exits
@@ -186,7 +186,7 @@ class BotConfig:
         COOLDOWN_SECONDS = 60
         
     # ============================================================
-    # 11. TIME WINDOWS (NEW)
+    # 11.TIME WINDOWS (NEW)
     # ============================================================
     class TimeWindows:
         # Market Hours
@@ -217,7 +217,7 @@ class BotConfig:
         }
         
     # ============================================================
-    # 12. STRATEGY-REGIME MAPPING (NEW)
+    # 12.STRATEGY-REGIME MAPPING (NEW)
     # ============================================================
     STRATEGY_REGIME_RULES = {
         'TRENDING': [
@@ -240,7 +240,7 @@ class BotConfig:
     }
     
     # ============================================================
-    # 13. RSI SETTINGS
+    # 13.RSI SETTINGS
     # ============================================================
     class RSI:
         PERIOD = 14
@@ -252,7 +252,7 @@ class BotConfig:
         MOMENTUM_BEAR_HIGH = 45
         
     # ============================================================
-    # 14. PATTERN SETTINGS
+    # 14.PATTERN SETTINGS
     # ============================================================
     class Patterns:
         MIN_CANDLE_BODY = 10             # Points
@@ -260,28 +260,28 @@ class BotConfig:
         DOJI_BODY_PCT = 0.1              # Body < 10% of range
         
     # ============================================================
-    # 15. LOGGING & SYSTEM
+    # 15.LOGGING & SYSTEM
     # ============================================================
     DEBUG_MODE = False
     VERBOSE_LOGGING = True
     
-    BASE_LOG_PATH = r"D:\StockMarket\StockMarket\scripts\claude\experiment6\logs"
+    BASE_LOG_PATH = r"D:\\StockMarket\\StockMarket\\scripts\\claude\\experiment6\\log"
     
     @classmethod
     def get_log_paths(cls) -> Dict[str, str]: 
         """Returns validated log paths."""
         paths = {
-            'engine_log': os.path.join(cls. BASE_LOG_PATH, "engine_logs"),
-            'bot_log': os. path.join(cls.BASE_LOG_PATH, "bot_logs"),
+            'engine_log': os.path.join(cls.BASE_LOG_PATH, "engine_logs"),
+            'bot_log': os.path.join(cls.BASE_LOG_PATH, "bot_logs"),
             'trade_book':  os.path.join(cls.BASE_LOG_PATH, "trade_books"),
             'summary':  os.path.join(cls.BASE_LOG_PATH, "summaries"),
-            'market_context': os. path.join(cls.BASE_LOG_PATH, "market_context"),
-            'signals': os.path. join(cls.BASE_LOG_PATH, "signals")
+            'market_context': os.path.join(cls.BASE_LOG_PATH, "market_context"),
+            'signals': os.path.join(cls.BASE_LOG_PATH, "signals")
         }
         
-        for key, path in paths. items():
+        for key, path in paths.items():
             try:
-                os. makedirs(path, exist_ok=True)
+                os.makedirs(path, exist_ok=True)
             except OSError as e:
                 print(f"❌ CRITICAL: Could not create {path}:  {e}")
                 sys.exit(1)
@@ -295,7 +295,7 @@ class BotConfig:
         
         # Credentials
         if not cls.API_KEY or len(cls.API_KEY) < 10:
-            errors. append("API_KEY is missing or invalid.")
+            errors.append("API_KEY is missing or invalid.")
         if not cls.API_SECRET:
             errors.append("API_SECRET is missing.")
 
@@ -311,9 +311,9 @@ class BotConfig:
             errors.append("TARGET must be > STOP_LOSS")
             
         # Strategies
-        for strat in cls. STRATEGIES_TO_RUN:
+        for strat in cls.STRATEGIES_TO_RUN:
             if strat not in cls.ALL_STRATEGIES:
-                errors. append(f"Unknown strategy: {strat}")
+                errors.append(f"Unknown strategy: {strat}")
 
         if errors:
             print("\n❌ CONFIG VALIDATION FAILED:")
@@ -331,9 +331,9 @@ class BotConfig:
         print("⚙️  EXPERIMENT 6 CONFIGURATION")
         print("="*60)
         print(f"Timeframes:      {cls.TIMEFRAMES}")
-        print(f"Strategies:     {len(cls. STRATEGIES_TO_RUN)} active")
+        print(f"Strategies:     {len(cls.STRATEGIES_TO_RUN)} active")
         print(f"Capital/Strat:  ₹{cls.Risk.CAPITAL_PER_STRATEGY: ,.0f}")
-        print(f"Max Positions:  {cls.Risk. MAX_CONCURRENT_POSITIONS}")
+        print(f"Max Positions:  {cls.Risk.MAX_CONCURRENT_POSITIONS}")
         print(f"Option Expiry:  {cls.OPTION_EXPIRY}")
         print("="*60 + "\n")
 

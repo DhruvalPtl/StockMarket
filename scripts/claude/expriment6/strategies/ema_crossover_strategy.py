@@ -1,6 +1,6 @@
 """
 EMA CROSSOVER STRATEGY
-Pure EMA crossover with multiple confirmations. 
+Pure EMA crossover with multiple confirmations.
 
 Different from VWAP_EMA_Trend: 
 - Focuses specifically on the CROSSOVER event (not just alignment)
@@ -19,7 +19,7 @@ from collections import deque
 
 import sys
 import os
-sys.path.append(os.path.dirname(os.path. dirname(os.path.abspath(__file__))))
+sys.path.append(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
 from strategies.base_strategy import (
     BaseStrategy, SignalType, MarketData, StrategySignal
@@ -33,7 +33,7 @@ class EMACrossoverStrategy(BaseStrategy):
     """
     EMA CROSSOVER STRATEGY
     
-    Focus:  Catching the exact moment EMAs cross, with confirmation. 
+    Focus:  Catching the exact moment EMAs cross, with confirmation.
     
     Key Difference from other EMA strategies:
     - Detects the CROSSOVER event (not just alignment)
@@ -41,10 +41,10 @@ class EMACrossoverStrategy(BaseStrategy):
     - Has cooldown after crossover to avoid whipsaws
     
     Entry Logic: 
-    1. EMA 5 crosses EMA 13 (detected via previous data)
-    2.  Crossover happened within last 3 candles (fresh)
-    3. Volume is above average (confirmation)
-    4. Price is on the right side of both EMAs
+    1.EMA 5 crosses EMA 13 (detected via previous data)
+    2. Crossover happened within last 3 candles (fresh)
+    3.Volume is above average (confirmation)
+    4.Price is on the right side of both EMAs
     
     Works best in:  TRENDING markets (early trend detection)
     """
@@ -58,12 +58,12 @@ class EMACrossoverStrategy(BaseStrategy):
         super().__init__(config, timeframe)
         
         # Track EMA relationship history
-        self. ema_history:  deque = deque(maxlen=10)  # (ema5, ema13, timestamp)
+        self.ema_history:  deque = deque(maxlen=10)  # (ema5, ema13, timestamp)
         
         # Crossover tracking
         self.last_crossover_type: Optional[str] = None  # 'BULLISH' or 'BEARISH'
         self.last_crossover_index: int = 0
-        self. candles_since_crossover: int = 999  # Large number initially
+        self.candles_since_crossover: int = 999  # Large number initially
         
         # Settings
         self.crossover_freshness = 3  # Must trade within 3 candles of crossover
@@ -75,9 +75,9 @@ class EMACrossoverStrategy(BaseStrategy):
         """
         # Store current EMA state
         self.ema_history.append({
-            'ema5': data. ema_5,
+            'ema5': data.ema_5,
             'ema13': data.ema_13,
-            'timestamp': data. timestamp
+            'timestamp': data.timestamp
         })
         
         # Need at least 2 data points to detect crossover
@@ -86,7 +86,7 @@ class EMACrossoverStrategy(BaseStrategy):
         
         # Get previous state
         prev_state = self.ema_history[-2]
-        curr_state = self. ema_history[-1]
+        curr_state = self.ema_history[-1]
         
         # Detect crossover
         prev_bullish = prev_state['ema5'] > prev_state['ema13']
@@ -99,11 +99,11 @@ class EMACrossoverStrategy(BaseStrategy):
             self.candles_since_crossover = 0
         elif not curr_bullish and prev_bullish:
             # BEARISH CROSSOVER: EMA5 crossed below EMA13
-            self. last_crossover_type = 'BEARISH'
+            self.last_crossover_type = 'BEARISH'
             self.candles_since_crossover = 0
         else:
             # No new crossover, increment counter
-            self. candles_since_crossover += 1
+            self.candles_since_crossover += 1
         
         # Check if we should trade this crossover
         if self.candles_since_crossover > self.crossover_freshness:
@@ -123,12 +123,12 @@ class EMACrossoverStrategy(BaseStrategy):
     
     def _generate_bullish_signal(self, data: MarketData, context: MarketContext) -> Tuple[SignalType, str, int]: 
         """
-        Generate BUY_CE signal after bullish crossover. 
+        Generate BUY_CE signal after bullish crossover.
         """
         score = 3  # Base score for fresh crossover
         
         # Confirmation: Price above both EMAs
-        if data.spot_price > data. ema_5 and data.spot_price > data. ema_13:
+        if data.spot_price > data.ema_5 and data.spot_price > data.ema_13:
             score += 1
         
         # Confirmation: Green candle
@@ -140,19 +140,19 @@ class EMACrossoverStrategy(BaseStrategy):
             score += 1
         
         # Confirmation:  VWAP alignment
-        if data. price_above_vwap: 
+        if data.price_above_vwap: 
             score += 1
         
         # Confirmation:  Trend regime
-        if context. regime == MarketRegime. TRENDING_UP:
+        if context.regime == MarketRegime.TRENDING_UP:
             score += 1
         
         # Strong volume bonus
-        if data. volume_relative >= 2. 0:
+        if data.volume_relative >= 2.0:
             score += 1
         
         return (
-            SignalType. BUY_CE,
+            SignalType.BUY_CE,
             f"EMA_Cross_Up (5>{13} Vol:{data.volume_relative:.1f}x Candles:{self.candles_since_crossover})",
             min(5, score)
         )
@@ -176,11 +176,11 @@ class EMACrossoverStrategy(BaseStrategy):
             score += 1
         
         # Confirmation:  VWAP alignment
-        if data. price_below_vwap:
+        if data.price_below_vwap:
             score += 1
         
         # Confirmation: Trend regime
-        if context. regime == MarketRegime.TRENDING_DOWN:
+        if context.regime == MarketRegime.TRENDING_DOWN:
             score += 1
         
         # Strong volume bonus
@@ -189,7 +189,7 @@ class EMACrossoverStrategy(BaseStrategy):
         
         return (
             SignalType.BUY_PE,
-            f"EMA_Cross_Down (5<13 Vol:{data. volume_relative:.1f}x Candles:{self.candles_since_crossover})",
+            f"EMA_Cross_Down (5<13 Vol:{data.volume_relative:.1f}x Candles:{self.candles_since_crossover})",
             min(5, score)
         )
     
@@ -198,7 +198,7 @@ class EMACrossoverStrategy(BaseStrategy):
         return {
             'last_type': self.last_crossover_type,
             'candles_since':  self.candles_since_crossover,
-            'is_fresh': self. candles_since_crossover <= self. crossover_freshness
+            'is_fresh': self.candles_since_crossover <= self.crossover_freshness
         }
 
 
@@ -207,7 +207,7 @@ class EMACrossoverStrategy(BaseStrategy):
 # ============================================================
 
 if __name__ == "__main__":
-    print("\n🔬 Testing EMA Crossover Strategy.. .\n")
+    print("\n🔬 Testing EMA Crossover Strategy...\n")
     
     class MockConfig:
         class Exit:
@@ -240,7 +240,7 @@ if __name__ == "__main__":
     context = MarketContextBuilder()\
         .set_regime(MarketRegime.TRENDING_UP, 28, 10)\
         .set_bias(MarketBias.NEUTRAL, 0)\
-        .set_time_window(TimeWindow. MORNING_SESSION, 280, False)\
+        .set_time_window(TimeWindow.MORNING_SESSION, 280, False)\
         .build()
     
     signal = strategy.check_entry(data1, context)
@@ -249,7 +249,7 @@ if __name__ == "__main__":
     
     # Candle 2: EMA5 > EMA13 (BULLISH CROSSOVER!)
     import time
-    time. sleep(0.1)
+    time.sleep(0.1)
     
     data2 = MarketData(
         timestamp=datetime.now(),

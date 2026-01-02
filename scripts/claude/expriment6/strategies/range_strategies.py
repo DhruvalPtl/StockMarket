@@ -11,7 +11,7 @@ from datetime import datetime
 
 import sys
 import os
-sys.path.append(os.path. dirname(os.path.dirname(os. path.abspath(__file__))))
+sys.path.append(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
 from strategies.base_strategy import (
     BaseStrategy, SignalType, MarketData, StrategySignal
@@ -45,8 +45,8 @@ class VWAPBounceStrategy(BaseStrategy):
     
     def __init__(self, config, timeframe:  str = "1minute"):
         super().__init__(config, timeframe)
-        self.rsi_oversold = config.RSI. OVERSOLD
-        self.rsi_overbought = config. RSI.OVERBOUGHT
+        self.rsi_oversold = config.RSI.OVERSOLD
+        self.rsi_overbought = config.RSI.OVERBOUGHT
     
     def _check_entry_conditions(self, data: MarketData, context:  MarketContext) -> Tuple[SignalType, str, int]:
         """
@@ -57,11 +57,11 @@ class VWAPBounceStrategy(BaseStrategy):
             return SignalType.NO_SIGNAL, "", 0
         
         # Need valid VWAP
-        if data.vwap == 0 or self.prev_data. vwap == 0:
+        if data.vwap == 0 or self.prev_data.vwap == 0:
             return SignalType.NO_SIGNAL, "", 0
         
         # Detect VWAP crossover
-        prev_above_vwap = self.prev_data. future_price > self.prev_data. vwap
+        prev_above_vwap = self.prev_data.future_price > self.prev_data.vwap
         curr_above_vwap = data.future_price > data.vwap
         
         # BUY CE:  Crossed from BELOW to ABOVE VWAP
@@ -75,7 +75,7 @@ class VWAPBounceStrategy(BaseStrategy):
                     score += 1
                 
                 # Bonus: Green candle confirmation
-                if data. is_green_candle:
+                if data.is_green_candle:
                     score += 1
                 
                 # Bonus: PCR supportive
@@ -84,7 +84,7 @@ class VWAPBounceStrategy(BaseStrategy):
                 
                 return (
                     SignalType.BUY_CE,
-                    f"VWAP_Bounce_Up (Cross Above + RSI:{data. rsi:.1f})",
+                    f"VWAP_Bounce_Up (Cross Above + RSI:{data.rsi:.1f})",
                     min(5, score)
                 )
         
@@ -103,7 +103,7 @@ class VWAPBounceStrategy(BaseStrategy):
                     score += 1
                 
                 # Bonus: PCR supportive
-                if data. pcr < 1.0:
+                if data.pcr < 1.0:
                     score += 1
                 
                 return (
@@ -137,19 +137,19 @@ class RangeMeanReversionStrategy(BaseStrategy):
     
     def __init__(self, config, timeframe: str = "1minute"):
         super().__init__(config, timeframe)
-        self.rsi_oversold = config.RSI. OVERSOLD
-        self.rsi_overbought = config.RSI. OVERBOUGHT
+        self.rsi_oversold = config.RSI.OVERSOLD
+        self.rsi_overbought = config.RSI.OVERBOUGHT
     
     def _check_entry_conditions(self, data: MarketData, context:  MarketContext) -> Tuple[SignalType, str, int]:
         """
-        Mean reversion at range extremes. 
+        Mean reversion at range extremes.
         """
         # Must be in ranging regime
-        if context.regime != MarketRegime. RANGING:
-            return SignalType. NO_SIGNAL, "", 0
+        if context.regime != MarketRegime.RANGING:
+            return SignalType.NO_SIGNAL, "", 0
         
         # ADX should be low (confirming range)
-        if data. adx > 25:
+        if data.adx > 25:
             return SignalType.NO_SIGNAL, "", 0
         
         # BUY CE:  Oversold in range (expect bounce)
@@ -158,7 +158,7 @@ class RangeMeanReversionStrategy(BaseStrategy):
             score = 2
             
             # Near VWAP or below (room to bounce)
-            if data.future_price <= data. vwap * 1.002:
+            if data.future_price <= data.vwap * 1.002:
                 score += 1
             
             # Near support level
@@ -168,12 +168,12 @@ class RangeMeanReversionStrategy(BaseStrategy):
                     score += 2
             
             # Bullish divergence hint:  Price making lows but RSI stable
-            if data. is_green_candle:   # Reversal candle
+            if data.is_green_candle:   # Reversal candle
                 score += 1
             
             if score >= 3:
                 return (
-                    SignalType. BUY_CE,
+                    SignalType.BUY_CE,
                     f"Range_Reversal_Up (RSI:{data.rsi:.1f} ADX:{data.adx:.1f})",
                     min(5, score)
                 )
@@ -183,11 +183,11 @@ class RangeMeanReversionStrategy(BaseStrategy):
             score = 2
             
             # Near VWAP or above
-            if data.future_price >= data. vwap * 0.998:
+            if data.future_price >= data.vwap * 0.998:
                 score += 1
             
             # Near resistance level
-            if context. nearest_resistance > 0:
+            if context.nearest_resistance > 0:
                 dist_to_resistance = context.nearest_resistance - data.future_price
                 if dist_to_resistance < 30:
                     score += 2
@@ -199,7 +199,7 @@ class RangeMeanReversionStrategy(BaseStrategy):
             if score >= 3:
                 return (
                     SignalType.BUY_PE,
-                    f"Range_Reversal_Down (RSI:{data. rsi:.1f} ADX:{data.adx:.1f})",
+                    f"Range_Reversal_Down (RSI:{data.rsi:.1f} ADX:{data.adx:.1f})",
                     min(5, score)
                 )
         
@@ -235,7 +235,7 @@ if __name__ == "__main__":
     
     # First data point:  Below VWAP
     data1 = MarketData(
-        timestamp=datetime. now(),
+        timestamp=datetime.now(),
         spot_price=24000,
         future_price=24010,  # Below VWAP
         future_open=24000,
@@ -299,16 +299,16 @@ if __name__ == "__main__":
     
     # Need to update timestamp to pass re-entry guard
     import time
-    time. sleep(0.1)
+    time.sleep(0.1)
     data2.timestamp = datetime.now()
     
-    signal = vwap_bounce. check_entry(data2, context)
+    signal = vwap_bounce.check_entry(data2, context)
     if signal:
         print(f"\nSecond candle (crossed above VWAP):")
         print(f"  Signal:  {signal.signal_type.value}")
         print(f"  Reason: {signal.reason}")
         print(f"  Strength: {signal.strength.value}")
-        print(f"  Score: {signal. base_score}")
+        print(f"  Score: {signal.base_score}")
     else:
         print("No signal (check re-entry guard)")
     
@@ -346,13 +346,13 @@ if __name__ == "__main__":
     )
     
     context_range = MarketContextBuilder()\
-        .set_regime(MarketRegime. RANGING, 15, 25)\
+        .set_regime(MarketRegime.RANGING, 15, 25)\
         .set_bias(MarketBias.NEUTRAL, -10)\
         .set_time_window(TimeWindow.LUNCH_SESSION, 200, False)\
         .set_key_levels([], 23900, 24200, 24000, 24000)\
         .build()
     
-    signal = mean_reversion. check_entry(data_oversold, context_range)
+    signal = mean_reversion.check_entry(data_oversold, context_range)
     if signal:
         print(f"Signal: {signal.signal_type.value}")
         print(f"Reason: {signal.reason}")

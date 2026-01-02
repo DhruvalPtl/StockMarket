@@ -92,16 +92,16 @@ class MarketContext:
     timestamp: datetime = field(default_factory=datetime.now)
     
     # === REGIME ===
-    regime:  MarketRegime = MarketRegime. UNKNOWN
+    regime:  MarketRegime = MarketRegime.UNKNOWN
     regime_strength: float = 0.0          # 0-100 (ADX value)
     regime_duration: int = 0              # Candles in current regime
     
     # === BIAS ===
-    bias: MarketBias = MarketBias. NEUTRAL
+    bias: MarketBias = MarketBias.NEUTRAL
     bias_score: float = 0.0               # -100 to +100
     
     # === TIME ===
-    time_window: TimeWindow = TimeWindow. MARKET_CLOSED
+    time_window: TimeWindow = TimeWindow.MARKET_CLOSED
     minutes_to_close: int = 0
     is_expiry_day: bool = False
     
@@ -149,9 +149,9 @@ class MarketContext:
     def is_tradeable(self) -> bool:
         """Check if market conditions allow trading."""
         # Not tradeable conditions
-        if self. time_window == TimeWindow. MARKET_CLOSED: 
+        if self.time_window == TimeWindow.MARKET_CLOSED: 
             return False
-        if self.time_window == TimeWindow. CLOSING:
+        if self.time_window == TimeWindow.CLOSING:
             return False
         if self.volatility_state == VolatilityState.EXTREME: 
             return False
@@ -161,27 +161,27 @@ class MarketContext:
         """Returns simplified regime for strategy mapping."""
         if self.regime in [MarketRegime.TRENDING_UP, MarketRegime.TRENDING_DOWN]:
             return "TRENDING"
-        elif self.regime == MarketRegime. VOLATILE:
+        elif self.regime == MarketRegime.VOLATILE:
             return "VOLATILE"
         else:
             return "RANGING"
     
     def is_strategy_allowed(self, strategy_name: str, config) -> bool:
         """
-        Check if strategy should run in current market conditions. 
+        Check if strategy should run in current market conditions.
         Uses both regime and time rules.
         """
-        # 1. Check regime rules
+        # 1.Check regime rules
         regime_simple = self.get_regime_simple()
         allowed_strategies = config.STRATEGY_REGIME_RULES.get(regime_simple, [])
         
         if strategy_name not in allowed_strategies: 
             return False
         
-        # 2. Check time rules
-        time_rules = config.TimeWindows. STRATEGY_TIME_RULES.get(strategy_name, [])
+        # 2.Check time rules
+        time_rules = config.TimeWindows.STRATEGY_TIME_RULES.get(strategy_name, [])
         if time_rules:
-            current_window = self.time_window. value
+            current_window = self.time_window.value
             if current_window not in time_rules: 
                 return False
         
@@ -189,7 +189,7 @@ class MarketContext:
     
     def get_exit_params(self, config) -> Dict[str, float]:
         """Returns regime-adaptive exit parameters."""
-        regime_simple = self. get_regime_simple()
+        regime_simple = self.get_regime_simple()
         exits = config.Exit.EXITS_BY_REGIME.get(
             regime_simple,
             {
@@ -213,15 +213,15 @@ class MarketContext:
             multiplier *= 1.2
             
         # Reduce if low confidence
-        if self. confidence_score < 50:
+        if self.confidence_score < 50:
             multiplier *= 0.8
             
         # Reduce during lunch (choppy)
-        if self.time_window == TimeWindow. LUNCH_SESSION: 
+        if self.time_window == TimeWindow.LUNCH_SESSION: 
             multiplier *= 0.8
             
         # Increase during power hour with strong trend
-        if self. time_window == TimeWindow.POWER_HOUR:
+        if self.time_window == TimeWindow.POWER_HOUR:
             if self.regime in [MarketRegime.TRENDING_UP, MarketRegime.TRENDING_DOWN]:
                 multiplier *= 1.2
         
@@ -234,66 +234,66 @@ class MarketContext:
             'timestamp': self.timestamp.strftime("%H:%M:%S"),
             'regime':  self.regime.value,
             'regime_strength': round(self.regime_strength, 1),
-            'bias': self.bias. value,
+            'bias': self.bias.value,
             'bias_score': round(self.bias_score, 1),
             'time_window': self.time_window.value,
             'volatility':  self.volatility_state.value,
             'spot':  self.spot_price,
             'future': self.future_price,
-            'premium': round(self. future_premium, 1),
+            'premium': round(self.future_premium, 1),
             'vwap': round(self.vwap, 1),
             'rsi': round(self.rsi, 1),
             'adx': round(self.adx, 1),
             'pcr': round(self.order_flow.pcr, 2),
             'atm':  self.atm_strike,
             'max_pain':  self.max_pain_strike,
-            'confidence': round(self. confidence_score, 1),
-            'preferred_direction': self. preferred_direction
+            'confidence': round(self.confidence_score, 1),
+            'preferred_direction': self.preferred_direction
         }
     
     def print_summary(self):
         """Prints a formatted summary of market context."""
         regime_icon = {
-            MarketRegime. TRENDING_UP: "📈",
+            MarketRegime.TRENDING_UP: "📈",
             MarketRegime.TRENDING_DOWN: "📉",
             MarketRegime.RANGING: "↔️",
-            MarketRegime. VOLATILE: "⚡",
-            MarketRegime. UNKNOWN: "❓"
+            MarketRegime.VOLATILE: "⚡",
+            MarketRegime.UNKNOWN: "❓"
         }
         
         bias_icon = {
             MarketBias.STRONG_BULLISH: "🟢🟢",
             MarketBias.BULLISH: "🟢",
             MarketBias.NEUTRAL:  "⚪",
-            MarketBias. BEARISH: "🔴",
-            MarketBias. STRONG_BEARISH: "🔴🔴"
+            MarketBias.BEARISH: "🔴",
+            MarketBias.STRONG_BEARISH: "🔴🔴"
         }
         
         print(f"\n{'='*50}")
-        print(f"🧠 MARKET CONTEXT @ {self.timestamp. strftime('%H:%M:%S')}")
+        print(f"🧠 MARKET CONTEXT @ {self.timestamp.strftime('%H:%M:%S')}")
         print(f"{'='*50}")
-        print(f"Regime:      {regime_icon.get(self.regime, '')} {self.regime.value} (ADX:{self.regime_strength:. 0f})")
-        print(f"Bias:       {bias_icon. get(self.bias, '')} {self.bias.value} (Score:{self. bias_score: +.0f})")
-        print(f"Window:     {self. time_window.value}")
+        print(f"Regime:      {regime_icon.get(self.regime, '')} {self.regime.value} (ADX:{self.regime_strength:.0f})")
+        print(f"Bias:       {bias_icon.get(self.bias, '')} {self.bias.value} (Score:{self.bias_score:+.0f})")
+        print(f"Window:     {self.time_window.value}")
         print(f"Volatility:  {self.volatility_state.value} (ATR:{self.atr:.1f})")
         print(f"{'─'*50}")
-        print(f"Spot:        {self.spot_price:. 2f}")
-        print(f"Future:     {self. future_price:.2f} (Premium:{self. future_premium: +.1f})")
-        print(f"VWAP:       {self.vwap:. 2f} ({self.price_vs_vwap})")
+        print(f"Spot:        {self.spot_price:.2f}")
+        print(f"Future:     {self.future_price:.2f} (Premium:{self.future_premium:+.1f})")
+        print(f"VWAP:       {self.vwap:.2f} ({self.price_vs_vwap})")
         print(f"RSI:        {self.rsi:.1f}")
         print(f"{'─'*50}")
-        print(f"PCR:        {self.order_flow. pcr:.2f}")
-        print(f"OI Signal:  {self. order_flow. oi_signal}")
-        print(f"ATM:         {self.atm_strike} | Max Pain: {self. max_pain_strike}")
+        print(f"PCR:        {self.order_flow.pcr:.2f}")
+        print(f"OI Signal:  {self.order_flow.oi_signal}")
+        print(f"ATM:         {self.atm_strike} | Max Pain: {self.max_pain_strike}")
         print(f"{'─'*50}")
-        print(f"Direction:  {self. preferred_direction} (Confidence:{self.confidence_score:. 0f}%)")
-        print(f"Strategies: {', '.join(self. recommended_strategies[: 3]) if self.recommended_strategies else 'None'}")
+        print(f"Direction:  {self.preferred_direction} (Confidence:{self.confidence_score:.0f}%)")
+        print(f"Strategies: {', '.join(self.recommended_strategies[:3]) if self.recommended_strategies else 'None'}")
         print(f"{'='*50}\n")
 
 
 class MarketContextBuilder:
     """
-    Builder pattern for constructing MarketContext. 
+    Builder pattern for constructing MarketContext.
     Called by the intelligence modules to build the context step by step.
     """
     
@@ -317,8 +317,8 @@ class MarketContextBuilder:
     
     def set_time_window(self, window: TimeWindow, minutes_to_close: int, is_expiry:  bool) -> 'MarketContextBuilder':
         self.context.time_window = window
-        self.context. minutes_to_close = minutes_to_close
-        self. context.is_expiry_day = is_expiry
+        self.context.minutes_to_close = minutes_to_close
+        self.context.is_expiry_day = is_expiry
         return self
     
     def set_volatility(self, state: VolatilityState, atr: float, atr_pct: float, iv_pct:  float) -> 'MarketContextBuilder': 
@@ -330,7 +330,7 @@ class MarketContextBuilder:
     
     def set_prices(self, spot:  float, future: float, vwap: float) -> 'MarketContextBuilder':
         self.context.spot_price = spot
-        self.context. future_price = future
+        self.context.future_price = future
         self.context.future_premium = future - spot
         self.context.vwap = vwap
         
@@ -338,7 +338,7 @@ class MarketContextBuilder:
         if vwap > 0:
             diff = spot - vwap
             if diff > 10: 
-                self.context. price_vs_vwap = "ABOVE"
+                self.context.price_vs_vwap = "ABOVE"
             elif diff < -10:
                 self.context.price_vs_vwap = "BELOW"
             else:
@@ -347,27 +347,27 @@ class MarketContextBuilder:
         return self
     
     def set_indicators(self, ema_alignment: str, rsi: float, adx: float) -> 'MarketContextBuilder':
-        self.context. ema_alignment = ema_alignment
+        self.context.ema_alignment = ema_alignment
         self.context.rsi = rsi
-        self.context. adx = adx
+        self.context.adx = adx
         return self
     
     def set_key_levels(self, levels: List[KeyLevel], support: float, resistance:  float, 
                        max_pain: int, atm:  int) -> 'MarketContextBuilder': 
         self.context.key_levels = levels
-        self. context.nearest_support = support
+        self.context.nearest_support = support
         self.context.nearest_resistance = resistance
         self.context.max_pain_strike = max_pain
         self.context.atm_strike = atm
         return self
     
     def set_order_flow(self, flow: OrderFlowState) -> 'MarketContextBuilder': 
-        self.context. order_flow = flow
+        self.context.order_flow = flow
         return self
     
     def set_opening_range(self, high: float, low:  float, is_set: bool) -> 'MarketContextBuilder':
-        self. context.opening_range_high = high
-        self.context. opening_range_low = low
+        self.context.opening_range_high = high
+        self.context.opening_range_low = low
         self.context.opening_range_set = is_set
         return self
     
@@ -375,7 +375,7 @@ class MarketContextBuilder:
                            direction: str, confidence: float) -> 'MarketContextBuilder':
         self.context.recommended_strategies = strategies
         self.context.avoid_strategies = avoid
-        self.context. preferred_direction = direction
+        self.context.preferred_direction = direction
         self.context.confidence_score = confidence
         return self
     
@@ -410,7 +410,7 @@ def get_current_time_window() -> TimeWindow:
     
     # Power hour: 14:00 - 15:20
     if time(14, 0) <= now < time(15, 20):
-        return TimeWindow. POWER_HOUR
+        return TimeWindow.POWER_HOUR
     
     # Closing:  15:20 - 15:30
     if time(15, 20) <= now <= time(15, 30):

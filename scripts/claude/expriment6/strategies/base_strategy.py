@@ -1,6 +1,6 @@
 """
 BASE STRATEGY
-Enhanced abstract base class for all strategies. 
+Enhanced abstract base class for all strategies.
 
 Features:
 - Market context awareness (regime, bias, time window)
@@ -18,7 +18,7 @@ from enum import Enum
 
 import sys
 import os
-sys.path.append(os.path. dirname(os.path.dirname(os. path.abspath(__file__))))
+sys.path.append(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
 from market_intelligence.market_context import (
     MarketContext, MarketRegime, MarketBias, TimeWindow, VolatilityState
@@ -76,16 +76,16 @@ class StrategySignal:
     def to_dict(self) -> Dict[str, Any]:
         """Convert to dictionary for logging."""
         return {
-            'signal':  self.signal_type. value,
+            'signal':  self.signal_type.value,
             'strength': self.strength.value,
-            'reason': self. reason,
+            'reason': self.reason,
             'strategy': self.strategy_name,
             'timeframe': self.timeframe,
             'regime': self.regime,
-            'bias': self. bias,
+            'bias': self.bias,
             'score': self.base_score,
             'factors': self.confluence_factors,
-            'timestamp': self.timestamp. strftime("%H:%M:%S")
+            'timestamp': self.timestamp.strftime("%H:%M:%S")
         }
 
 
@@ -133,25 +133,25 @@ class MarketData:
     # Convenience properties
     @property
     def price_above_vwap(self) -> bool:
-        return self. future_price > self. vwap
+        return self.future_price > self.vwap
     
     @property
     def price_below_vwap(self) -> bool:
-        return self. future_price < self.vwap
+        return self.future_price < self.vwap
     
     @property
     def ema_bullish(self) -> bool:
         """EMA 5 > EMA 13 > EMA 21"""
-        return self. ema_5 > self.ema_13 > self.ema_21
+        return self.ema_5 > self.ema_13 > self.ema_21
     
     @property
     def ema_bearish(self) -> bool:
         """EMA 5 < EMA 13 < EMA 21"""
-        return self. ema_5 < self.ema_13 < self.ema_21
+        return self.ema_5 < self.ema_13 < self.ema_21
     
     @property
     def price_above_ema5(self) -> bool:
-        return self.spot_price > self. ema_5
+        return self.spot_price > self.ema_5
     
     @property
     def price_below_ema5(self) -> bool:
@@ -214,7 +214,7 @@ class BaseStrategy(ABC):
         
         # Re-entry guard
         self.last_signal_timestamp:  Optional[datetime] = None
-        self. last_signal_type:  Optional[SignalType] = None
+        self.last_signal_type:  Optional[SignalType] = None
         
         # Cooldown tracking
         self.last_trade_time: Optional[datetime] = None
@@ -233,7 +233,7 @@ class BaseStrategy(ABC):
     @abstractmethod
     def _check_entry_conditions(self, data: MarketData, context: MarketContext) -> Tuple[SignalType, str, int]:
         """
-        Core strategy logic.  Must be implemented by subclasses.
+        Core strategy logic. Must be implemented by subclasses.
         
         Args:
             data:  Current market data
@@ -246,7 +246,7 @@ class BaseStrategy(ABC):
     
     def check_entry(self, data: MarketData, context: MarketContext) -> Optional[StrategySignal]:
         """
-        Main entry point.  Applies filters then calls strategy logic.
+        Main entry point. Applies filters then calls strategy logic.
         
         Args:
             data: Current market data
@@ -255,51 +255,51 @@ class BaseStrategy(ABC):
         Returns:
             StrategySignal if conditions met, None otherwise
         """
-        # 1. Check if strategy should be active in current regime
+        # 1.Check if strategy should be active in current regime
         if not self._is_regime_allowed(context):
             return None
         
-        # 2. Check if strategy should be active in current time window
+        # 2.Check if strategy should be active in current time window
         if not self._is_time_window_allowed(context):
             return None
         
-        # 3. Check re-entry guard
-        if not self._is_new_candle(data. timestamp):
+        # 3.Check re-entry guard
+        if not self._is_new_candle(data.timestamp):
             return None
         
-        # 4. Check cooldown
+        # 4.Check cooldown
         if not self._is_cooldown_complete():
             return None
         
-        # 5. Check if market is tradeable
+        # 5.Check if market is tradeable
         if not context.is_tradeable():
             return None
         
-        # 6. Call strategy-specific logic
+        # 6.Call strategy-specific logic
         signal_type, reason, base_score = self._check_entry_conditions(data, context)
         
         if signal_type == SignalType.NO_SIGNAL: 
             self.prev_data = data
             return None
         
-        # 7. Calculate confluence factors
+        # 7.Calculate confluence factors
         confluence_factors = self._get_confluence_factors(data, context, signal_type)
         
-        # 8. Determine signal strength
+        # 8.Determine signal strength
         strength = self._calculate_signal_strength(base_score, len(confluence_factors), context)
         
-        # 9. Get suggested parameters
+        # 9.Get suggested parameters
         suggested_target, suggested_stop = self._get_suggested_exits(context)
         
-        # 10. Create signal
+        # 10.Create signal
         signal = StrategySignal(
             signal_type=signal_type,
             strength=strength,
             reason=reason,
             strategy_name=self.STRATEGY_NAME,
             timeframe=self.timeframe,
-            regime=context.regime. value,
-            bias=context.bias. value,
+            regime=context.regime.value,
+            bias=context.bias.value,
             base_score=base_score,
             confluence_factors=confluence_factors,
             suggested_target=suggested_target,
@@ -307,19 +307,19 @@ class BaseStrategy(ABC):
             preferred_strike_offset=self._get_preferred_strike_offset(signal_type, context)
         )
         
-        # 11. Mark signal generated
-        self._mark_signal_generated(data. timestamp, signal_type)
+        # 11.Mark signal generated
+        self._mark_signal_generated(data.timestamp, signal_type)
         self.signal_history.append(signal)
         self.signals_generated += 1
         
-        # 12. Store previous data
+        # 12.Store previous data
         self.prev_data = data
         
         return signal
     
     def _is_regime_allowed(self, context:  MarketContext) -> bool:
         """Check if current regime is suitable for this strategy."""
-        current_regime = context. get_regime_simple()
+        current_regime = context.get_regime_simple()
         
         if current_regime not in self.OPTIMAL_REGIMES: 
             self.signals_filtered += 1
@@ -329,10 +329,10 @@ class BaseStrategy(ABC):
     
     def _is_time_window_allowed(self, context: MarketContext) -> bool:
         """Check if current time window is suitable for this strategy."""
-        current_window = context.time_window. value
+        current_window = context.time_window.value
         
         if current_window not in self.ACTIVE_TIME_WINDOWS:
-            self. signals_filtered += 1
+            self.signals_filtered += 1
             return False
         
         return True
@@ -344,7 +344,7 @@ class BaseStrategy(ABC):
         
         # Consider same minute as same candle for 1min timeframe
         if self.timeframe == "1minute":
-            return current_timestamp. minute != self.last_signal_timestamp.minute
+            return current_timestamp.minute != self.last_signal_timestamp.minute
         elif self.timeframe == "5minute": 
             return (current_timestamp - self.last_signal_timestamp).seconds >= 300
         
@@ -361,7 +361,7 @@ class BaseStrategy(ABC):
     def _mark_signal_generated(self, timestamp: datetime, signal_type:  SignalType):
         """Records that a signal was generated."""
         self.last_signal_timestamp = timestamp
-        self. last_signal_type = signal_type
+        self.last_signal_type = signal_type
     
     def mark_trade_executed(self):
         """Called when a trade is actually executed (for cooldown)."""
@@ -376,51 +376,51 @@ class BaseStrategy(ABC):
         factors = []
         is_bullish = signal_type == SignalType.BUY_CE
         
-        # 1. Regime alignment
-        if is_bullish and context.regime == MarketRegime. TRENDING_UP:
+        # 1.Regime alignment
+        if is_bullish and context.regime == MarketRegime.TRENDING_UP:
             factors.append("REGIME_ALIGNED")
-        elif not is_bullish and context.regime == MarketRegime. TRENDING_DOWN: 
+        elif not is_bullish and context.regime == MarketRegime.TRENDING_DOWN: 
             factors.append("REGIME_ALIGNED")
         
-        # 2. Bias alignment
-        if is_bullish and context.bias in [MarketBias.BULLISH, MarketBias. STRONG_BULLISH]: 
+        # 2.Bias alignment
+        if is_bullish and context.bias in [MarketBias.BULLISH, MarketBias.STRONG_BULLISH]: 
             factors.append("BIAS_ALIGNED")
-        elif not is_bullish and context.bias in [MarketBias.BEARISH, MarketBias. STRONG_BEARISH]:
+        elif not is_bullish and context.bias in [MarketBias.BEARISH, MarketBias.STRONG_BEARISH]:
             factors.append("BIAS_ALIGNED")
         
-        # 3. VWAP alignment
+        # 3.VWAP alignment
         if is_bullish and data.price_above_vwap:
             factors.append("ABOVE_VWAP")
         elif not is_bullish and data.price_below_vwap: 
             factors.append("BELOW_VWAP")
         
-        # 4. EMA alignment
-        if is_bullish and data. ema_bullish:
-            factors. append("EMA_BULLISH")
-        elif not is_bullish and data. ema_bearish:
-            factors. append("EMA_BEARISH")
+        # 4.EMA alignment
+        if is_bullish and data.ema_bullish:
+            factors.append("EMA_BULLISH")
+        elif not is_bullish and data.ema_bearish:
+            factors.append("EMA_BEARISH")
         
-        # 5. RSI alignment
+        # 5.RSI alignment
         if is_bullish and data.rsi_bullish_momentum:
             factors.append("RSI_MOMENTUM")
         elif not is_bullish and data.rsi_bearish_momentum: 
             factors.append("RSI_MOMENTUM")
         
-        # 6. Order flow alignment
-        if is_bullish and context.order_flow. smart_money_direction == "BULLISH": 
+        # 6.Order flow alignment
+        if is_bullish and context.order_flow.smart_money_direction == "BULLISH": 
             factors.append("ORDER_FLOW")
-        elif not is_bullish and context.order_flow. smart_money_direction == "BEARISH":
-            factors. append("ORDER_FLOW")
+        elif not is_bullish and context.order_flow.smart_money_direction == "BEARISH":
+            factors.append("ORDER_FLOW")
         
-        # 7. Volume confirmation
+        # 7.Volume confirmation
         if context.order_flow.volume_state in ["SPIKE", "HIGH"]:
-            factors. append("VOLUME_CONFIRM")
+            factors.append("VOLUME_CONFIRM")
         
-        # 8. Futures premium alignment
+        # 8.Futures premium alignment
         if is_bullish and context.future_premium > 50:
-            factors. append("PREMIUM_BULLISH")
+            factors.append("PREMIUM_BULLISH")
         elif not is_bullish and context.future_premium < 20:
-            factors. append("PREMIUM_BEARISH")
+            factors.append("PREMIUM_BEARISH")
         
         return factors
     
@@ -434,7 +434,7 @@ class BaseStrategy(ABC):
         # Adjust for volatility
         if context.volatility_state == VolatilityState.HIGH:
             total_score -= 1  # Reduce confidence in high volatility
-        elif context.volatility_state == VolatilityState. LOW:
+        elif context.volatility_state == VolatilityState.LOW:
             total_score += 1  # Increase confidence in low volatility
         
         # Adjust for time window
@@ -445,9 +445,9 @@ class BaseStrategy(ABC):
         
         # Classify
         if total_score >= 7:
-            return SignalStrength. STRONG
+            return SignalStrength.STRONG
         elif total_score >= 4:
-            return SignalStrength. MODERATE
+            return SignalStrength.MODERATE
         else: 
             return SignalStrength.WEAK
     
@@ -482,7 +482,7 @@ class BaseStrategy(ABC):
         return {
             'name': self.STRATEGY_NAME,
             'timeframe': self.timeframe,
-            'signals_generated': self. signals_generated,
+            'signals_generated': self.signals_generated,
             'signals_filtered': self.signals_filtered,
             'filter_rate': (self.signals_filtered / 
                           (self.signals_generated + self.signals_filtered) * 100
@@ -508,7 +508,7 @@ class DummyStrategy(BaseStrategy):
 # ============================================================
 
 if __name__ == "__main__":
-    print("\n🔬 Testing Base Strategy Framework.. .\n")
+    print("\n🔬 Testing Base Strategy Framework...\n")
     
     # Create mock config
     class MockConfig:
@@ -526,7 +526,7 @@ if __name__ == "__main__":
     from market_intelligence.market_context import MarketContextBuilder, OrderFlowState
     
     data = MarketData(
-        timestamp=datetime. now(),
+        timestamp=datetime.now(),
         spot_price=24050,
         future_price=24100,
         future_open=24000,
@@ -552,10 +552,10 @@ if __name__ == "__main__":
     )
     
     context = MarketContextBuilder()\
-        .set_regime(MarketRegime. TRENDING_UP, 28, 10)\
+        .set_regime(MarketRegime.TRENDING_UP, 28, 10)\
         .set_bias(MarketBias.BULLISH, 45)\
         .set_time_window(TimeWindow.MORNING_SESSION, 300, False)\
-        .set_volatility(VolatilityState. NORMAL, 45, 55, 50)\
+        .set_volatility(VolatilityState.NORMAL, 45, 55, 50)\
         .set_order_flow(OrderFlowState(
             smart_money_direction="BULLISH",
             volume_state="HIGH"
@@ -566,15 +566,15 @@ if __name__ == "__main__":
     dummy = DummyStrategy(MockConfig())
     signal = dummy.check_entry(data, context)
     
-    print(f"Strategy: {dummy. STRATEGY_NAME}")
+    print(f"Strategy: {dummy.STRATEGY_NAME}")
     print(f"Signal:  {signal}")
     print(f"Stats: {dummy.get_stats()}")
     
     # Test MarketData properties
     print(f"\nMarketData Properties:")
-    print(f"  price_above_vwap: {data. price_above_vwap}")
+    print(f"  price_above_vwap: {data.price_above_vwap}")
     print(f"  ema_bullish:  {data.ema_bullish}")
-    print(f"  rsi_bullish_momentum: {data. rsi_bullish_momentum}")
+    print(f"  rsi_bullish_momentum: {data.rsi_bullish_momentum}")
     print(f"  strong_candle:  {data.strong_candle}")
     
     print("\n✅ Base Strategy Framework Test Complete!")
