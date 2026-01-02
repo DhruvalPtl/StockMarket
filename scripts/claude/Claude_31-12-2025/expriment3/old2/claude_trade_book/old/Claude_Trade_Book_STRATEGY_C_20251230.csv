@@ -1,0 +1,2 @@
+Entry_Time,Exit_Time,Strategy,Symbol,Type,Strike,Entry_Price,Exit_Price,Max_Price,PnL,PnL_Pct,Balance,Exit_Reason
+11:30:54,11:45:01,STRATEGY_C,NIFTY2610625900PE,PE,25900,92,86.95,96.6,-378.75,-5.49,9621.25,STOP_LOSS

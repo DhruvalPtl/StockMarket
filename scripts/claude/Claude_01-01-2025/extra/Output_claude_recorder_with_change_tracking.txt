@@ -1,0 +1,16 @@
+ Nifty: 26155.95 | RSI: 51➖ | ATM: 26150 | CE: ₹99.70 | PE: ₹75.00 | PCR: 0.9⚖️ | ✅ LIVE
+🚨 ALERT: OI_PATTERN - SHORT_COVERING detected
+✅ LIVE
+🚨 ALERT: OI_PATTERN - SHORT_COVERING detected
+📊 Nifty: 26137.30 | RSI: 39🧊 | ATM: 26150 | CE: ₹96.75 | PE: ₹75.85 | PCR: 0.91⚖️ | ✅ LIVE
+🚨 ALERT: OI_PATTERN - SHORT_COVERING detected
+📊 Nifty: 26133.60 | RSI: 37🧊 | ATM: 26150 | CE: ₹93.65 | PE: ₹75.70 | PCR: 0.91⚖️ | ✅ LIVE
+🚨 ALERT: OI_PATTERN - SHORT_COVERING detected
+⏸️  Market Closed | 15:51:03141.65 (+0.00) | RSI: 42 | PCR: 0.91 | Signal: BUY_PE | 🚨 Alerts: 1088
+
+======================================================================
+Total Ticks:  3999
+Alerts:       1088
+Data File:    D:\StockMarket\StockMarket\scripts\claude\market_recorder\Master_Data_2025-12-24.csv
+Alert File:   D:\StockMarket\StockMarket\scripts\claude\market_recorder\Alerts_2025-12-24.csv
+======================================================================
