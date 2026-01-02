@@ -1,0 +1,69 @@
+REQUIRED RAW DATA
+
+NIFTY 1-min OHLCV
+
+ATM CE/PE LTP every minute
+
+Full Option Chain (OI, IV, LTP) every minute
+
+✔ PRICE FEATURES
+
+EMA (5, 20, 50)
+
+SMA (10, 20, 50)
+
+RSI 14
+
+MACD
+
+VWAP
+
+ATR 14
+
+Candle body size
+
+Candle wick size
+
+High/Low breakout indicators
+
+✔ OPTION FEATURES
+
+CE LTP Δ1, Δ3
+
+PE LTP Δ1, Δ3
+
+CE/PE ratio
+
+Straddle price
+
+IV (CE, PE)
+
+IV trend
+
+✔ OI FEATURES
+
+CE OI change
+
+PE OI change
+
+OI % change
+
+CE/PE volume ratio
+
+Max Pain levels (optional)
+
+OI-based support/resistance
+
+✔ TIME FEATURES
+
+Minute of day
+
+Day of week
+
+Is expiry day
+
+Minutes until close
+
+✔ TARGET LABEL
+
+next 2–3 minute direction (UP / DOWN / SIDEWAYS)

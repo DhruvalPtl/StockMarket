@@ -1,0 +1,2 @@
+Entry_Time,Exit_Time,Signal,Strike,Entry_Price,Exit_Price,PnL,Reason,Spot_at_Entry,VWAP_at_Entry,RSI_at_Entry
+09:29:05,09:34:31,BUY_PE,25900,44.3,32.4,-892.5,STOP_LOSS,25883.7,25898.57,34.97

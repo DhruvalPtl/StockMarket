@@ -1,0 +1,41 @@
+(.venv312) PS D:\StockMarket\StockMarket> python -u "d:\StockMarket\StockMarket\scripts\claude\claude_advanced_market_recorder.py"
+
+⚠️  ENSURE MARKET IS OPEN BEFORE STARTING
+This recorder captures live data every second.
+
+Press ENTER to start recording...
+
+======================================================================
+📹 ADVANCED MARKET RECORDER - COMPLETE DATA CAPTURE
+======================================================================
+
+⚙️ STARTING ENGINE | Expiry: 2025-12-30 | Future: NSE-NIFTY-30Dec25-FUT
+📝 Logging Data to: D:\StockMarket\StockMarket\scripts\claude\claude_engine_log\Engine_Log_20251224_114157.csv
+Ready to Groww!
+✅ Engine Connected to API.
+✅ CSV Files Initialized with Headers
+
+✅ Recorder Initialized
+📁 Files Created:
+   1. D:\StockMarket\StockMarket\scripts\claude\market_recorder\Spot_Data_2025-12-24.csv
+   2. D:\StockMarket\StockMarket\scripts\claude\market_recorder\Options_Data_2025-12-24.csv
+   3. D:\StockMarket\StockMarket\scripts\claude\market_recorder\Full_Chain_2025-12-24.csv
+======================================================================
+
+🎬 Recording Started...
+Press Ctrl+C to stop
+
+📊 Nifty: 26196.60 | RSI: 27🧊 | ATM: 26200 | CE: ₹102.80 | PE: ₹82.20 | PCR: 1.2🐂 | ✅ LIVE
+✅ Full chain recorded (236 strikes)
+⏳ Update #37 | 11:43:51 | Fetching data...0 | ATM: 26200 | RSI: 26 | PCR: 1.19 | CE: ₹102.60 | PE: ₹82.00
+⚠️ Future Error #1: Rate limit has breached for your request. Please try again later.
+📊 Nifty: 26182.45 | RSI: 24🧊 | ATM: 26200 | CE: ₹96.90 | PE: ₹86.55 | PCR: 1.19🐂 | ✅ LIVE
+✅ Full chain recorded (236 strikes)
+📊 Nifty: 26182.95 | RSI: 24🧊 | ATM: 26200 | CE: ₹97.20 | PE: ₹86.20 | PCR: 1.15🐂 | ✅ LIVE
+✅ Full chain recorded (236 strikes)
+📊 Nifty: 26183.40 | RSI: 24🧊 | ATM: 26200 | CE: ₹97.05 | PE: ₹85.50 | PCR: 1.15🐂 | ✅ LIVE
+✅ Full chain recorded (236 strikes)
+📊 Nifty: 26183.95 | RSI: 27🧊 | ATM: 26200 | CE: ₹97.45 | PE: ₹85.35 | PCR: 1.13🐂 | ✅ LIVE
+✅ Full chain recorded (236 strikes)
+📊 Nifty: 26184.35 | RSI: 27🧊 | ATM: 26200 | CE: ₹97.40 | PE: ₹85.15 | PCR: 1.13🐂 | ✅ LIVE
+✅ Full chain recorded (236 strikes)
