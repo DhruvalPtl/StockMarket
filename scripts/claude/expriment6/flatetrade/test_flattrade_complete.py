@@ -210,7 +210,7 @@ class FlattradeDataTester:
                 # Convert to DataFrame
                 rows = []
                 for strike, data in strikes.items():
-                    row = {'strike': int(strike)}
+                    row = {'strike': float(strike)}
                     if 'CE' in data:
                         row['ce_ltp'] = data['CE'].get('ltp', 0)
                         row['ce_oi'] = data['CE'].get('oi', 0)

@@ -162,7 +162,6 @@ class FlattradeWrapper:
                         print(f"❌ No match for: {search_str}")
             except Exception as e:
                 print(f"❌ Future token error: {e}")
-                import traceback
                 traceback.print_exc()
                 
         # 3. Handle OPTIONS (e.g., NSE-NIFTY-06Jan26-24000-CE)
@@ -237,12 +236,17 @@ class FlattradeWrapper:
             # Convert to Groww format
             strikes = {}
             for opt in ret['values']:
-                strike = int(opt.get('strprc', 0))
-                opt_type = opt.get('optt', '')  # 'CE' or 'PE'
-                
-                if strike == 0:
+                strike_str = opt.get('strprc', '0')
+                try:
+                    strike = float(strike_str)
+                    # For NIFTY, strikes are whole numbers, but keep as float for safety
+                    if strike == 0:
+                        continue
+                except (ValueError, TypeError):
                     continue
                     
+                opt_type = opt.get('optt', '')  # 'CE' or 'PE'
+                
                 if strike not in strikes:
                     strikes[strike] = {}
                 
@@ -259,6 +263,5 @@ class FlattradeWrapper:
             
         except Exception as e:
             print(f"❌ Option chain error: {e}")
-            import traceback
             traceback.print_exc()
             return {'strikes': {}}
