@@ -20,16 +20,11 @@ from typing import Dict, List, Optional, Set, Tuple
 from collections import deque
 from dataclasses import dataclass
 
-# Try importing GrowwAPI
-try:
-    from growwapi import GrowwAPI
-except ImportError:
-    print("⚠️ WARNING: 'growwapi' not found.Using mock mode.")
-    GrowwAPI = None
+# Add parent directory to import config
+parent_dir = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+sys.path.insert(0, parent_dir)
 
-# Add parent to path
-sys.path.append(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
-
+from utils.flattrade_wrapper import FlattradeWrapper
 from config import BotConfig, get_timeframe_display_name
 
 
@@ -141,7 +136,7 @@ class DataEngine:
         self.opening_range_set: bool = False
         
         # === INTERNAL STATE ===
-        self.groww: Optional[GrowwAPI] = None
+        self.api: Optional[FlattradeWrapper] = None
         self.is_connected: bool = False
         
         # Candle history
@@ -177,22 +172,25 @@ class DataEngine:
         self._init_logging()
     
     def _connect(self):
-        """Authenticates with the Groww API."""
-        if GrowwAPI is None:
-            print(f"[{self.timeframe}] ❌ CRITICAL: growwapi package not installed")
-            print(f"[{self.timeframe}] Install with: pip install growwapi")
-            sys.exit(1)
-        
-        try: 
-            print(f"[{self.timeframe}] 🔑 Authenticating...")
-            token = GrowwAPI.get_access_token(api_key=self.api_key, secret=self.api_secret)
-            self.groww = GrowwAPI(token)
-            self.is_connected = True
-            print(f"[{self.timeframe}] ✅ Connected to Groww API")
+        """Connect to Flattrade API"""
+        try:
+            print(f"[{self.timeframe}] 🔑 Connecting to Flattrade...")
+            self.api = FlattradeWrapper(
+                user_id=BotConfig.USER_ID,
+                user_token=BotConfig.USER_TOKEN
+            )
+            
+            if self.api.is_connected:
+                self.is_connected = True
+                print(f"[{self.timeframe}] ✅ Connected to Flattrade")
+            else:
+                print(f"[{self.timeframe}] ❌ Connection Failed")
+                raise ConnectionError("Flattrade connection failed")
+                
         except Exception as e:
             print(f"[{self.timeframe}] ❌ Connection Failed: {e}")
             print(f"[{self.timeframe}] 🛑 STOPPING - Fix your API credentials in config.py")
-            sys.exit(1)  # ✅ EXIT IMMEDIATELY - NO MOCK MODE
+            raise
     
     def _init_logging(self):
         """Sets up CSV logging."""
@@ -350,7 +348,7 @@ class DataEngine:
             start_dt = datetime.now() - timedelta(days=5)
             end_dt = datetime.now()
 
-            resp = self.groww.get_historical_candles(
+            resp = self.api.get_historical_candles(
                 "NSE", "CASH", "NSE-NIFTY",
                 start_dt.strftime("%Y-%m-%d %H:%M:%S"),
                 end_dt.strftime("%Y-%m-%d %H:%M:%S"),
@@ -360,7 +358,7 @@ class DataEngine:
             # Fallback to Live Quote
             if not resp or 'candles' not in resp or len(resp['candles']) == 0:
                 try:
-                    quote = self.groww.get_quote("NIFTY", "NSE", "CASH")
+                    quote = self.api.get_quote("NSE-NIFTY")
                     self.spot_ltp = float(quote['last_price'])
                 except: 
                     pass
@@ -418,7 +416,7 @@ class DataEngine:
             start_dt = datetime.now() - timedelta(days=5)
             end_dt = datetime.now()
 
-            resp = self.groww.get_historical_candles(
+            resp = self.api.get_historical_candles(
                 "NSE", "FNO", self.fut_symbol,
                 start_dt.strftime("%Y-%m-%d %H:%M:%S"),
                 end_dt.strftime("%Y-%m-%d %H:%M:%S"),
@@ -487,12 +485,12 @@ class DataEngine:
     
     def _fetch_option_chain(self):
         """Fetches option chain data."""
-        if not self. is_connected:
-            print(f"❌ [{self. timeframe}] No API connection")
-            raise e
+        if not self.is_connected:
+            print(f"❌ [{self.timeframe}] No API connection")
+            return
         
         try:
-            chain = self.groww.get_option_chain("NSE", "NIFTY", self.option_expiry)
+            chain = self.api.get_option_chain("NSE", "NIFTY", self.option_expiry)
             
             if not chain or 'strikes' not in chain:
                 print(f"⚠️ [{self.timeframe}] No option chain data received") 
@@ -736,8 +734,8 @@ if __name__ == "__main__":
     print("\n🔬 Testing Data Engine...\n")
     
     engine = DataEngine(
-        api_key="eyJraWQiOiJaTUtjVXciLCJhbGciOiJFUzI1NiJ9.eyJleHAiOjI1NTU4NjEzMzUsImlhdCI6MTc2NzQ2MTMzNSwibmJmIjoxNzY3NDYxMzM1LCJzdWIiOiJ7XCJ0b2tlblJlZklkXCI6XCJjOTQyMDNkYS00MDQ4LTQ5OGYtODBlMS0wZWU0ZTA1OWU4NGVcIixcInZlbmRvckludGVncmF0aW9uS2V5XCI6XCJlMzFmZjIzYjA4NmI0MDZjODg3NGIyZjZkODQ5NTMxM1wiLFwidXNlckFjY291bnRJZFwiOlwiMDdmMDA0MGMtZTk4Zi00ZDNmLTk5Y2EtZDc1ZjBlYWU5M2NlXCIsXCJkZXZpY2VJZFwiOlwiZDMyMWIxMzUtZWQ5Mi01ZWJkLWJjMDUtZTY1NDY2OWRiMDM5XCIsXCJzZXNzaW9uSWRcIjpcIjNjZmFlMDU3LWIyNTEtNDdjYS05MGM1LTkyYmZkY2M1NWFkZFwiLFwiYWRkaXRpb25hbERhdGFcIjpcIno1NC9NZzltdjE2WXdmb0gvS0EwYk1yOE5XVzhzdTNvZ080am1ZUzIwZEpSTkczdTlLa2pWZDNoWjU1ZStNZERhWXBOVi9UOUxIRmtQejFFQisybTdRPT1cIixcInJvbGVcIjpcImF1dGgtdG90cFwiLFwic291cmNlSXBBZGRyZXNzXCI6XCIyNDA5OjQwOTA6MTA4ZjpkYzA1OjY1OWY6NDQxODo4NmQ6NWUwYywxNzIuNzAuMTkxLjE3MywzNS4yNDEuMjMuMTIzXCIsXCJ0d29GYUV4cGlyeVRzXCI6MjU1NTg2MTMzNTIxMX0iLCJpc3MiOiJhcGV4LWF1dGgtcHJvZC1hcHAifQ.-vlexEi6oglfAlbHgDWWj09TMl3wNhUz--ywOAskAP6L4No-KNpAkJYbEVVjD-dmq9zvzXK5S38plZFlayxX2g",
-        api_secret="ydGmCf^ik0eHA6eMZaO#hnwJlqTm6GU5",
+        api_key=BotConfig.USER_ID,
+        api_secret=BotConfig.USER_TOKEN,
         option_expiry="2026-01-06",
         future_expiry="2026-01-27",
         fut_symbol="NSE-NIFTY-27Jan26-FUT",

@@ -16,27 +16,24 @@ class BotConfig:
     """
     
     # ============================================================
-    # 1. API CONNECTION (FLATTRADE TOKEN METHOD)
+    # 1. API CONNECTION (FLATTRADE ONLY)
     # ============================================================
     BROKER = "FLATTRADE"
-    USER_ID = "FZ31397"  # Your ID
-    
-    # PASTE THE LONG TOKEN HERE (From your Flask App output)
-    USER_TOKEN = "03514367a294fd228af0e955424a4f48d2a11a81e927a2fa58e5f7d97194d672"
+    USER_ID = "FZ31397"  # Your Flattrade user ID
+    USER_TOKEN = "03514367a294fd228af0e955424a4f48d2a11a81e927a2fa58e5f7d97194d672"  # Your token
 
     # ============================================================
     # 1.API CREDENTIALS & CONNECTION
     # ============================================================
     
-    # GROWW API CREDENTIALS
-    # Get your API credentials from Groww Developer Portal
-    # https://groww.in/developer
+    # LEGACY: Groww API credentials (kept for backward compatibility)
+    # The bot now uses Flattrade as primary API
     GROWW_API_KEY = "eyJraWQiOiJaTUtjVXciLCJhbGciOiJFUzI1NiJ9.eyJleHAiOjI1NTU4NjEzMzUsImlhdCI6MTc2NzQ2MTMzNSwibmJmIjoxNzY3NDYxMzM1LCJzdWIiOiJ7XCJ0b2tlblJlZklkXCI6XCJjOTQyMDNkYS00MDQ4LTQ5OGYtODBlMS0wZWU0ZTA1OWU4NGVcIixcInZlbmRvckludGVncmF0aW9uS2V5XCI6XCJlMzFmZjIzYjA4NmI0MDZjODg3NGIyZjZkODQ5NTMxM1wiLFwidXNlckFjY291bnRJZFwiOlwiMDdmMDA0MGMtZTk4Zi00ZDNmLTk5Y2EtZDc1ZjBlYWU5M2NlXCIsXCJkZXZpY2VJZFwiOlwiZDMyMWIxMzUtZWQ5Mi01ZWJkLWJjMDUtZTY1NDY2OWRiMDM5XCIsXCJzZXNzaW9uSWRcIjpcIjNjZmFlMDU3LWIyNTEtNDdjYS05MGM1LTkyYmZkY2M1NWFkZFwiLFwiYWRkaXRpb25hbERhdGFcIjpcIno1NC9NZzltdjE2WXdmb0gvS0EwYk1yOE5XVzhzdTNvZ080am1ZUzIwZEpSTkczdTlLa2pWZDNoWjU1ZStNZERhWXBOVi9UOUxIRmtQejFFQisybTdRPT1cIixcInJvbGVcIjpcImF1dGgtdG90cFwiLFwic291cmNlSXBBZGRyZXNzXCI6XCIyNDA5OjQwOTA6MTA4ZjpkYzA1OjY1OWY6NDQxODo4NmQ6NWUwYywxNzIuNzAuMTkxLjE3MywzNS4yNDEuMjMuMTIzXCIsXCJ0d29GYUV4cGlyeVRzXCI6MjU1NTg2MTMzNTIxMX0iLCJpc3MiOiJhcGV4LWF1dGgtcHJvZC1hcHAifQ.-vlexEi6oglfAlbHgDWWj09TMl3wNhUz--ywOAskAP6L4No-KNpAkJYbEVVjD-dmq9zvzXK5S38plZFlayxX2g"
     GROWW_API_SECRET = "ydGmCf^ik0eHA6eMZaO#hnwJlqTm6GU5"
     
-    # Legacy API_KEY/API_SECRET for backwards compatibility (points to Groww)
-    API_KEY = GROWW_API_KEY
-    API_SECRET = GROWW_API_SECRET
+    # Legacy variables (point to Flattrade for backward compatibility)
+    API_KEY = USER_ID
+    API_SECRET = USER_TOKEN
     
     # Rate Limiting (Seconds between calls)
     RATE_LIMIT_SPOT = 0.5

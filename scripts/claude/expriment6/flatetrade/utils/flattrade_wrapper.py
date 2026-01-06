@@ -4,7 +4,7 @@ from datetime import datetime
 import time
 
 # Use the NorenApi you already have working
-from utils.NorenApi import NorenApi
+from utils.NorenRestApiPy.NorenApi import NorenApi
 
 class FlattradeWrapper:
     def __init__(self, user_id, user_token):
@@ -82,22 +82,34 @@ class FlattradeWrapper:
         """Helper to find the numeric token for a symbol"""
         # 1. Handle NIFTY SPOT
         if symbol == "NSE-NIFTY" or symbol == "NIFTY":
-            return "26000" # Nifty 50 Token
+            return "26000"  # Nifty 50 Token
             
-        # 2. Handle NIFTY FUTURES (e.g., NSE-NIFTY-29Jan26-FUT)
+        # 2. Handle NIFTY FUTURES (e.g., NSE-NIFTY-27Jan26-FUT)
         if "FUT" in symbol:
-            # We need to search for it.
-            # Convert "NSE-NIFTY-29Jan26-FUT" -> "NIFTY 29JAN FUT"
             try:
-                parts = symbol.split('-') # ['NSE', 'NIFTY', '29Jan26', 'FUT']
-                date_part = parts[2].upper() # 29JAN26
-                search_str = f"NIFTY {date_part} FUT"
+                parts = symbol.split('-')  # ['NSE', 'NIFTY', '27Jan26', 'FUT']
+                date_part = parts[2]  # '27Jan26'
                 
-                res = self.api.searchscrip(exchange=exchange, searchtext=search_str)
-                if res and 'values' in res:
-                    return res['values'][0]['token']
-            except:
-                pass
+                # Convert '27Jan26' to '27JAN' for search
+                # Extract day and month
+                import re
+                match = re.match(r'(\d{1,2})([A-Za-z]{3})', date_part)
+                if match:
+                    day = match.group(1).zfill(2)
+                    month = match.group(2).upper()
+                    search_str = f"NIFTY {day}{month} FUT"
+                    
+                    print(f"🔍 Searching Flattrade for: {search_str}")
+                    res = self.api.searchscrip(exchange=exchange, searchtext=search_str)
+                    
+                    if res and 'values' in res and len(res['values']) > 0:
+                        token = res['values'][0]['token']
+                        print(f"✅ Found token: {token} for {symbol}")
+                        return token
+                    else:
+                        print(f"❌ No results for {search_str}")
+            except Exception as e:
+                print(f"❌ Token search error: {e}")
                 
         return None
 
@@ -109,7 +121,47 @@ class FlattradeWrapper:
                 return {'last_price': float(res['lp'])}
         return {'last_price': 0.0}
 
-    def get_option_chain(self, underlying, expiry):
-        # Placeholder: We will add Option Chain logic later if needed.
-        # For now, return empty to prevent crash, bot will skip Options but run Spot logic.
-        return []
+    def get_option_chain(self, exchange, underlying, expiry):
+        """
+        Fetch option chain from Flattrade.
+        Returns data in Groww-compatible format.
+        """
+        try:
+            # Convert expiry format: "2026-01-06" -> "06JAN26"
+            from datetime import datetime
+            expiry_dt = datetime.strptime(expiry, "%Y-%m-%d")
+            expiry_str = expiry_dt.strftime("%d%b%y").upper()
+            
+            # Flattrade option chain format
+            ret = self.api.get_option_chain(
+                exchange=exchange,
+                tradingsymbol=f"NIFTY{expiry_str}",
+                strikePrice="",
+                count="20"
+            )
+            
+            if not ret or 'values' not in ret:
+                return {'strikes': {}}
+            
+            # Convert to Groww format
+            strikes = {}
+            for opt in ret['values']:
+                strike = opt.get('strprc', 0)
+                opt_type = opt.get('optt', '')  # 'CE' or 'PE'
+                
+                if strike not in strikes:
+                    strikes[strike] = {}
+                
+                strikes[strike][opt_type] = {
+                    'symbol': opt.get('tsym', ''),
+                    'ltp': float(opt.get('lp', 0)),
+                    'oi': int(opt.get('oi', 0)),
+                    'volume': int(opt.get('v', 0)),
+                    'token': opt.get('token', '')
+                }
+            
+            return {'strikes': strikes}
+            
+        except Exception as e:
+            print(f"❌ Option chain error: {e}")
+            return {'strikes': {}}
