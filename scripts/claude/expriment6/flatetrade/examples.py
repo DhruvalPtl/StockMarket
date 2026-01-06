@@ -70,11 +70,8 @@ def example_2_direct_wrapper():
         user_token=BotConfig.USER_TOKEN
     )
     
-    candles = groww.get_historical_candles("NSE", "CASH", "NSE-NIFTY", start, end, "1minute")
-    ltp = groww.get_ltp("NSE", "NSE-NIFTY", "CASH")
-    
     candles = api.get_historical_candles("NSE", "CASH", "NSE-NIFTY", start, end, "1minute")
-    ltp = api.get_ltp("NSE", "NSE-NIFTY", "CASH")
+    ltp = api.get_quote("NSE-NIFTY")
     """)
 
 

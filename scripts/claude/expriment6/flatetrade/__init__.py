@@ -1,27 +1,22 @@
 """
 Experiment 6 - Intelligent Multi-Strategy Trading System
-With Flate Trade API Integration
+With Flattrade API Integration
 
-This package provides a unified API that works with both Groww and Flate Trade,
-allowing seamless switching between providers with zero code changes.
+This package provides an API integration with Flattrade for trading.
 
 Key Components:
-- unified_api: UnifiedAPI class supporting both Groww and Flate Trade
-- flate_api_adapter: FlateTradeAdapter for Groww-compatible interface
+- unified_api: UnifiedAPI class for Flattrade
+- flate_api_adapter: FlateTradeAdapter for API interface
 - data_pipeline: UnifiedDataEngine for real-time data collection
 - option_fetcher: UnifiedOptionFetcher for historical option data
-- test_comparison: Test and compare both APIs side-by-side
 
 Quick Start:
     from flatetrade import UnifiedAPI
     
-    # Use Groww
-    api = UnifiedAPI(provider="groww", api_key=key, api_secret=secret)
+    # Initialize Flattrade
+    api = UnifiedAPI(user_id="FZ31397", user_token="your_token")
     
-    # OR use Flate Trade (same code!)
-    api = UnifiedAPI(provider="flate", user_id=uid, user_token=token)
-    
-    # All existing code works unchanged
+    # Fetch data
     candles = api.get_historical_candles("NSE", "CASH", "NSE-NIFTY", start, end, "1minute")
 """
 
@@ -33,8 +28,8 @@ try:
     from .unified_api import UnifiedAPI, create_api
     from .flate_api_adapter import FlateTradeAdapter
     from .data_pipeline import UnifiedDataEngine
-    from .option_fetcher import UnifiedOptionFetcher, GrowwOptionFetcher
-    from .config import BotConfig, UnifiedConfig
+    from .option_fetcher import UnifiedOptionFetcher
+    from .config import BotConfig
     
     __all__ = [
         'UnifiedAPI',
@@ -42,9 +37,7 @@ try:
         'FlateTradeAdapter',
         'UnifiedDataEngine',
         'UnifiedOptionFetcher',
-        'GrowwOptionFetcher',
-        'BotConfig',
-        'UnifiedConfig'
+        'BotConfig'
     ]
 except ImportError:
     # Gracefully handle missing dependencies
