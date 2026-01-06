@@ -107,7 +107,7 @@ class UnifiedAPI:
         Args:
             exchange: Exchange code (e.g., "NSE")
             segment: Segment code (e.g., "CASH", "FNO")
-            symbol: Symbol in Groww format (e.g., "NSE-NIFTY")
+            symbol: Symbol (e.g., "NSE-NIFTY")
             start: Start datetime string "YYYY-MM-DD HH:MM:SS"
             end: End datetime string "YYYY-MM-DD HH:MM:SS"
             interval: Timeframe (e.g., "1minute", "5minute")
@@ -134,12 +134,7 @@ class UnifiedAPI:
             Dict with option chain data
         """
         try:
-            if self.provider == "groww":
-                # Groww has get_option_chain method
-                return self.api.get_option_chain(exchange, symbol, expiry)
-            else:
-                # Flate Trade adapter has the method
-                return self.api.get_option_chain(exchange, symbol, expiry)
+            return self.api.get_option_chain(exchange, symbol, expiry)
         except Exception as e:
             self.logger.error(f"❌ get_option_chain error: {e}")
             return {'expiry': expiry, 'strikes': [], 'data': {}}
@@ -150,7 +145,7 @@ class UnifiedAPI:
         
         Args:
             exchange: Exchange code (e.g., "NSE")
-            trading_symbol: Symbol in Groww format
+            trading_symbol: Trading symbol
             segment: Segment code (e.g., "CASH", "FNO")
             
         Returns:
@@ -234,7 +229,7 @@ class UnifiedAPI:
     
     def get_provider(self) -> str:
         """Get the current provider name"""
-        return self.provider
+        return "flattrade"
     
     def get_stats(self) -> Dict[str, Any]:
         """
@@ -244,7 +239,7 @@ class UnifiedAPI:
             Dict with stats (provider-specific)
         """
         stats = {
-            'provider': self.provider,
+            'provider': 'flattrade',
             'connected': self.api is not None
         }
         
@@ -252,43 +247,21 @@ class UnifiedAPI:
             stats.update(self.api.get_stats())
         
         return stats
-    
-    # Compatibility methods - make it work like GrowwAPI class methods
-    @staticmethod
-    def get_access_token(api_key: str, secret: str) -> str:
-        """
-        Get Groww access token (for Groww provider only)
-        
-        Args:
-            api_key: Groww API key
-            secret: Groww API secret
-            
-        Returns:
-            Access token string
-        """
-        if not GROWW_AVAILABLE:
-            raise ImportError("Groww API not available")
-        
-        return GrowwAPI.get_access_token(api_key=api_key, secret=secret)
 
 
-# Convenience function for easy migration
-def create_api(provider: str = "groww", **kwargs) -> UnifiedAPI:
+# Convenience function
+def create_api(user_id: str, user_token: str) -> UnifiedAPI:
     """
     Convenience function to create UnifiedAPI instance
     
     Args:
-        provider: "groww" or "flate"
-        **kwargs: Provider-specific credentials
+        user_id: Flattrade user ID
+        user_token: Flattrade authentication token
         
     Returns:
         UnifiedAPI instance
         
     Example:
-        # Groww
-        api = create_api("groww", api_key=key, api_secret=secret)
-        
-        # Flate Trade
-        api = create_api("flate", user_id=uid, user_token=token)
+        api = create_api(user_id="FZ31397", user_token="your_token")
     """
-    return UnifiedAPI(provider=provider, **kwargs)
+    return UnifiedAPI(user_id=user_id, user_token=user_token)

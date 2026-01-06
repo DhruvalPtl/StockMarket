@@ -1,8 +1,7 @@
 """
-EXAMPLE USAGE - Flate Trade API Integration
-===========================================
-This file demonstrates how to use the unified API integration
-with both Groww and Flate Trade.
+EXAMPLE USAGE - Flattrade API Integration
+==========================================
+This file demonstrates how to use the Flattrade API integration.
 
 Author: Claude
 Date: 2026-01-06
@@ -13,84 +12,67 @@ Date: 2026-01-06
 # ============================================================
 
 def example_1_basic_usage():
-    """Show basic usage with both providers"""
+    """Show basic usage with Flattrade"""
     from unified_api import UnifiedAPI
     from config import BotConfig
     from datetime import datetime, timedelta
     
     print("=" * 60)
-    print("EXAMPLE 1: Basic API Usage")
+    print("EXAMPLE 1: Basic API Usage with Flattrade")
     print("=" * 60)
     
-    # Method 1: Use Groww
-    print("\n1️⃣ Using Groww API:")
-    api_groww = UnifiedAPI(
-        provider="groww",
-        api_key=BotConfig.GROWW_API_KEY,
-        api_secret=BotConfig.GROWW_API_SECRET
-    )
-    
-    # Method 2: Use Flate Trade (same code!)
-    print("\n2️⃣ Using Flate Trade API:")
-    api_flate = UnifiedAPI(
-        provider="flate",
+    # Initialize Flattrade API
+    print("\n1️⃣ Using Flattrade API:")
+    api = UnifiedAPI(
         user_id=BotConfig.USER_ID,
         user_token=BotConfig.USER_TOKEN
     )
     
-    # Both work identically!
+    # Fetch historical data
     end = datetime.now()
     start = end - timedelta(hours=1)
     
     print("\n📊 Fetching historical candles (last 1 hour)...")
     
-    for name, api in [("Groww", api_groww), ("Flate", api_flate)]:
-        candles = api.get_historical_candles(
-            "NSE", "CASH", "NSE-NIFTY",
-            start.strftime("%Y-%m-%d %H:%M:%S"),
-            end.strftime("%Y-%m-%d %H:%M:%S"),
-            "5minute"
-        )
-        
-        if candles and 'candles' in candles:
-            print(f"   {name}: {len(candles['candles'])} candles")
-        else:
-            print(f"   {name}: No data")
+    candles = api.get_historical_candles(
+        "NSE", "CASH", "NSE-NIFTY",
+        start.strftime("%Y-%m-%d %H:%M:%S"),
+        end.strftime("%Y-%m-%d %H:%M:%S"),
+        "5minute"
+    )
+    
+    if candles and 'candles' in candles:
+        print(f"   Flattrade: {len(candles['candles'])} candles received")
+        print(f"   Latest close: {candles['candles'][-1]['c']}")
+    else:
+        print(f"   No data received")
 
 
 # ============================================================
-# EXAMPLE 2: Migrating Existing Code
+# EXAMPLE 2: Using the Wrapper Directly
 # ============================================================
 
-def example_2_migration():
-    """Show how to migrate existing Groww code"""
+def example_2_direct_wrapper():
+    """Show how to use FlattradeWrapper directly"""
     
     print("\n" + "=" * 60)
-    print("EXAMPLE 2: Migration from Groww API")
+    print("EXAMPLE 2: Using FlattradeWrapper Directly")
     print("=" * 60)
     
-    # BEFORE (Old Groww code):
-    print("\n❌ OLD CODE (Groww only):")
+    # Direct usage of the wrapper
+    print("\n✅ NEW CODE (Flattrade):")
     print("""
-    from growwapi import GrowwAPI
+    from utils.flattrade_wrapper import FlattradeWrapper
+    from config import BotConfig
     
-    token = GrowwAPI.get_access_token(api_key=KEY, secret=SECRET)
-    groww = GrowwAPI(token)
+    api = FlattradeWrapper(
+        user_id=BotConfig.USER_ID,
+        user_token=BotConfig.USER_TOKEN
+    )
     
     candles = groww.get_historical_candles("NSE", "CASH", "NSE-NIFTY", start, end, "1minute")
     ltp = groww.get_ltp("NSE", "NSE-NIFTY", "CASH")
-    """)
     
-    # AFTER (Works with both!):
-    print("\n✅ NEW CODE (Works with both Groww and Flate):")
-    print("""
-    from unified_api import UnifiedAPI
-    
-    # Just change this one line to switch providers!
-    api = UnifiedAPI(provider="groww", api_key=KEY, api_secret=SECRET)
-    # api = UnifiedAPI(provider="flate", user_id=UID, user_token=TOKEN)
-    
-    # All existing code works unchanged!
     candles = api.get_historical_candles("NSE", "CASH", "NSE-NIFTY", start, end, "1minute")
     ltp = api.get_ltp("NSE", "NSE-NIFTY", "CASH")
     """)
@@ -107,22 +89,21 @@ def example_3_data_pipeline():
     import time
     
     print("\n" + "=" * 60)
-    print("EXAMPLE 3: Data Pipeline")
+    print("EXAMPLE 3: Data Pipeline with Flattrade")
     print("=" * 60)
     
     # Calculate future symbol
     fut_symbol = get_future_symbol(BotConfig.FUTURE_EXPIRY)
     
     print("\n🔧 Creating data engine...")
-    print(f"   Provider: Groww")
+    print(f"   Provider: Flattrade")
     print(f"   Expiry: {BotConfig.OPTION_EXPIRY}")
     print(f"   Future: {fut_symbol}")
     
     # Create engine
     engine = UnifiedDataEngine(
-        provider="groww",
-        api_key=BotConfig.GROWW_API_KEY,
-        api_secret=BotConfig.GROWW_API_SECRET,
+        user_id=BotConfig.USER_ID,
+        user_token=BotConfig.USER_TOKEN,
         expiry_date=BotConfig.OPTION_EXPIRY,
         fut_symbol=fut_symbol
     )
@@ -161,14 +142,13 @@ def example_4_option_fetcher():
     from datetime import datetime
     
     print("\n" + "=" * 60)
-    print("EXAMPLE 4: Option Fetcher")
+    print("EXAMPLE 4: Option Fetcher with Flattrade")
     print("=" * 60)
     
     print("\n🔧 Creating option fetcher...")
     fetcher = UnifiedOptionFetcher(
-        provider="groww",
-        api_key=BotConfig.GROWW_API_KEY,
-        api_secret=BotConfig.GROWW_API_SECRET
+        user_id=BotConfig.USER_ID,
+        user_token=BotConfig.USER_TOKEN
     )
     
     # Get expiry
@@ -207,10 +187,10 @@ def example_4_option_fetcher():
 # ============================================================
 
 def example_5_trading_bot():
-    """Show how a trading bot would use the unified API"""
+    """Show how a trading bot would use the Flattrade API"""
     
     print("\n" + "=" * 60)
-    print("EXAMPLE 5: Trading Bot Integration")
+    print("EXAMPLE 5: Trading Bot Integration with Flattrade")
     print("=" * 60)
     
     print("\n📝 Example Trading Bot Code:")
@@ -218,8 +198,8 @@ def example_5_trading_bot():
     from unified_api import UnifiedAPI
     from config import BotConfig
     
-    # Initialize API (switch provider here!)
-    api = UnifiedAPI(provider="groww", api_key=KEY, api_secret=SECRET)
+    # Initialize Flattrade API
+    api = UnifiedAPI(user_id=BotConfig.USER_ID, user_token=BotConfig.USER_TOKEN)
     
     # Your existing trading logic
     while True:
@@ -250,48 +230,49 @@ def example_5_trading_bot():
     """)
     
     print("\n💡 Key Points:")
-    print("   - Same code works with both Groww and Flate Trade")
-    print("   - Just change provider parameter to switch")
-    print("   - No other code changes needed!")
+    print("   - Uses Flattrade API for all operations")
+    print("   - Direct integration with trading platform")
+    print("   - Reliable real-time data and order execution")
 
 
 # ============================================================
-# EXAMPLE 6: Comparison Testing
+# EXAMPLE 6: Testing
 # ============================================================
 
-def example_6_comparison():
-    """Show comparison testing"""
+def example_6_testing():
+    """Show testing approach"""
     
     print("\n" + "=" * 60)
-    print("EXAMPLE 6: API Comparison")
+    print("EXAMPLE 6: Testing Flattrade API")
     print("=" * 60)
     
-    print("\n📝 Run comparison test:")
+    print("\n📝 Run test script:")
     print("""
-    python test_comparison.py
+    python test_flattrade_data.py
     """)
     
     print("\n📊 This will:")
-    print("   1. Connect to both Groww and Flate Trade")
-    print("   2. Fetch historical candles from both")
-    print("   3. Fetch LTP from both")
-    print("   4. Fetch option chain from both")
-    print("   5. Compare results side-by-side")
-    print("   6. Flag any discrepancies")
-    print("   7. Print detailed report")
+    print("   1. Connect to Flattrade")
+    print("   2. Fetch last 7 days of NIFTY SPOT data")
+    print("   3. Fetch last 7 days of NIFTY FUTURE data")
+    print("   4. Save data to CSV files")
+    print("   5. Print summary statistics")
     
     print("\n✅ Expected Output:")
     print("""
-    ✅ Groww API connected
-    ✅ Flate Trade API connected
+    ✅ Flattrade Wrapper Connected Successfully!
     
-    📊 COMPARING HISTORICAL CANDLES
-    ✅ Got 24 candles (Groww)
-    ✅ Got 24 candles (Flate)
-    📈 COMPARISON: ✅ MATCH
+    📊 Fetching NIFTY SPOT data...
+    ✓ 2026-01-05: 78 candles
+    ✓ 2026-01-06: 82 candles
+    ✅ SPOT Data saved: flattrade_spot_test.csv
     
-    Match Rate: 2/2 (100.0%)
-    ✅ GOOD - APIs are producing consistent results
+    📊 Fetching NIFTY FUTURES data...
+    ✓ 2026-01-05: 78 candles
+    ✓ 2026-01-06: 82 candles
+    ✅ FUTURE Data saved: flattrade_future_test.csv
+    
+    ✅ TEST COMPLETE
     """)
 
 
@@ -302,39 +283,39 @@ def example_6_comparison():
 def main():
     """Main menu"""
     print("\n" + "=" * 60)
-    print("🚀 FLATE TRADE API INTEGRATION - EXAMPLES")
+    print("🚀 FLATTRADE API INTEGRATION - EXAMPLES")
     print("=" * 60)
     
     print("\nAvailable Examples:")
     print("1. Basic API Usage")
-    print("2. Migration from Groww")
+    print("2. Using Wrapper Directly")
     print("3. Data Pipeline")
     print("4. Option Fetcher")
     print("5. Trading Bot Integration")
-    print("6. Comparison Testing")
+    print("6. Testing")
     
     print("\n" + "=" * 60)
     print("NOTE: These are code examples, not live tests.")
     print("To run live tests, use:")
-    print("  - python test_comparison.py")
-    print("  - python data_pipeline.py --api groww")
-    print("  - python option_fetcher.py --api groww")
+    print("  - python test_flattrade_data.py")
+    print("  - python data_pipeline.py")
+    print("  - python option_fetcher.py")
     print("=" * 60)
     
     # Show all examples
     example_1_basic_usage()
-    example_2_migration()
+    example_2_direct_wrapper()
     # example_3_data_pipeline()  # Commented out - requires API connection
     # example_4_option_fetcher()  # Commented out - requires API connection
     example_5_trading_bot()
-    example_6_comparison()
+    example_6_testing()
     
     print("\n✅ Examples complete!")
     print("\n💡 Next Steps:")
-    print("   1. Add your API credentials to config.py")
-    print("   2. Run: python test_comparison.py")
-    print("   3. Test: python data_pipeline.py --api groww --updates 3")
-    print("   4. Switch to Flate Trade and test again!")
+    print("   1. Add your credentials to config.py (USER_ID, USER_TOKEN)")
+    print("   2. Run: python gettoken.py")
+    print("   3. Test: python test_flattrade_data.py")
+    print("   4. Run your trading bot with Flattrade!")
 
 
 if __name__ == "__main__":
