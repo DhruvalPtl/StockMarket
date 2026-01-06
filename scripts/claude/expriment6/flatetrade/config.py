@@ -20,7 +20,7 @@ class BotConfig:
     # ============================================================
     BROKER = "FLATTRADE"
     USER_ID = "FZ31397"  # Your Flattrade user ID
-    USER_TOKEN = "03514367a294fd228af0e955424a4f48d2a11a81e927a2fa58e5f7d97194d672"  # Your token
+    USER_TOKEN = "a318678a850c0467132b857b2f8ab38811708d950c3a68d54029d94b2bd875a9"  # Your token
 
     # ============================================================
     # 1.API CREDENTIALS & CONNECTION
@@ -308,7 +308,7 @@ class BotConfig:
         errors = []
         
         # Credentials
-        if not cls.API_KEY or len(cls.API_KEY) < 10:
+        if not cls.API_KEY or len(cls.API_KEY) < 2:
             errors.append("API_KEY is missing or invalid.")
         if not cls.API_SECRET:
             errors.append("API_SECRET is missing.")
