@@ -197,28 +197,38 @@ class FlattradeDataTester:
             print(f"Current Spot: ₹{spot_price:.2f}")
             print(f"ATM Strike: {atm_strike}")
             
-            # Fetch option chain
+            # Fetch option chain using NFO exchange
             chain_data = self.api.get_option_chain(
-                exchange="NSE",
+                exchange="NFO",  # Fixed!
                 underlying="NIFTY",
                 expiry=BotConfig.OPTION_EXPIRY
             )
             
-            if chain_data and 'strikes' in chain_data:
+            if chain_data and 'strikes' in chain_data and len(chain_data['strikes']) > 0:
                 strikes = chain_data['strikes']
                 
                 # Convert to DataFrame
                 rows = []
                 for strike, data in strikes.items():
-                    row = {'strike': strike}
+                    row = {'strike': int(strike)}
                     if 'CE' in data:
                         row['ce_ltp'] = data['CE'].get('ltp', 0)
                         row['ce_oi'] = data['CE'].get('oi', 0)
                         row['ce_volume'] = data['CE'].get('volume', 0)
+                    else:
+                        row['ce_ltp'] = 0
+                        row['ce_oi'] = 0
+                        row['ce_volume'] = 0
+                        
                     if 'PE' in data:
                         row['pe_ltp'] = data['PE'].get('ltp', 0)
                         row['pe_oi'] = data['PE'].get('oi', 0)
                         row['pe_volume'] = data['PE'].get('volume', 0)
+                    else:
+                        row['pe_ltp'] = 0
+                        row['pe_oi'] = 0
+                        row['pe_volume'] = 0
+                        
                     rows.append(row)
                 
                 df = pd.DataFrame(rows)
@@ -238,8 +248,8 @@ class FlattradeDataTester:
                 print(atm_df.to_string(index=False))
                 
                 # Calculate PCR
-                total_ce_oi = df['ce_oi'].sum() if 'ce_oi' in df else 0
-                total_pe_oi = df['pe_oi'].sum() if 'pe_oi' in df else 0
+                total_ce_oi = df['ce_oi'].sum()
+                total_pe_oi = df['pe_oi'].sum()
                 pcr = total_pe_oi / total_ce_oi if total_ce_oi > 0 else 0
                 
                 print(f"\n📊 PCR (Put-Call Ratio): {pcr:.2f}")
@@ -340,6 +350,14 @@ class FlattradeDataTester:
         all_candles = []
         current_date = start_date
         
+        # Determine segment based on symbol type
+        if "FUT" in symbol or symbol.count('-') >= 4:
+            segment = "FNO"  # Futures & Options
+            actual_exchange = "NFO"
+        else:
+            segment = "CASH"  # Spot/Index
+            actual_exchange = "NSE"
+        
         while current_date <= end_date:
             # Skip weekends
             if current_date.weekday() >= 5:
@@ -351,8 +369,8 @@ class FlattradeDataTester:
             
             try:
                 resp = self.api.get_historical_candles(
-                    exchange=exchange,
-                    segment="CASH" if "FUT" not in symbol and symbol.count('-') < 4 else "FNO",
+                    exchange=actual_exchange,  # Use NFO for futures/options
+                    segment=segment,
                     symbol=symbol,
                     start_time=day_start.strftime("%Y-%m-%d %H:%M:%S"),
                     end_time=day_end.strftime("%Y-%m-%d %H:%M:%S"),

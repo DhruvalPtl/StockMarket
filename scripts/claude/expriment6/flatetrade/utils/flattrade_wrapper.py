@@ -30,9 +30,17 @@ class FlattradeWrapper:
     def get_historical_candles(self, exchange, segment, symbol, start_time, end_time, interval):
         """
         Translates Flattrade data to the format your bot needs.
+        Automatically routes to correct exchange based on symbol type.
         """
         try:
-            # 1. Map Timeframe - Flattrade uses numbers
+            # 1. Auto-detect correct exchange
+            # SPOT (Index) = NSE, Futures/Options = NFO
+            actual_exchange = exchange
+            if "FUT" in symbol or symbol.count('-') >= 4:  # Futures or Options
+                actual_exchange = "NFO"
+                print(f"🔄 Auto-routing to NFO exchange for {symbol}")
+            
+            # 2. Map Timeframe - Flattrade uses numbers
             tf_map = {
                 '1minute': '1', 
                 '2minute': '2',
@@ -44,19 +52,20 @@ class FlattradeWrapper:
             }
             tf = tf_map.get(interval, '1')
             
-            # 2. Get Token
-            token = self._get_token(symbol, exchange)
+            # 3. Get Token
+            token = self._get_token(symbol, actual_exchange)
             if not token:
                 print(f"⚠️ Token not found for {symbol}")
                 return {'candles': []}
 
-            # 3. Convert Time to Epoch
+            # 4. Convert Time to Epoch
             start_dt = datetime.strptime(start_time, "%Y-%m-%d %H:%M:%S")
             start_epoch = str(int(start_dt.timestamp()))
             
-            # 4. Fetch Data
+            # 5. Fetch Data
+            print(f"📊 Fetching from {actual_exchange}: {symbol} (Token: {token})")
             ret = self.api.get_time_price_series(
-                exchange=exchange, 
+                exchange=actual_exchange,  # Use NFO for futures/options
                 token=token, 
                 starttime=start_epoch, 
                 interval=tf
@@ -65,7 +74,7 @@ class FlattradeWrapper:
             if not ret:
                 return {'candles': []}
                 
-            # 5. Convert to compatible format
+            # 6. Convert to compatible format
             candles = []
             for c in ret:
                 try:
@@ -82,7 +91,6 @@ class FlattradeWrapper:
                         'oi': int(c.get('intoi', 0))  # Add OI for futures
                     })
                 except Exception as e:
-                    print(f"⚠️ Skipping candle due to error: {e}")
                     continue
                     
             candles.sort(key=lambda x: x['t'])
@@ -106,19 +114,32 @@ class FlattradeWrapper:
                 parts = symbol.split('-')  # ['NSE', 'NIFTY', '27Jan26', 'FUT']
                 date_part = parts[2]  # '27Jan26'
                 
-                # Convert '27Jan26' to 'NIFTY27JAN26F' format
-                # Extract: day (27), month (Jan), year (26)
+                # Known tokens (from user's discovery)
+                known_futures = {
+                    "27JAN26": "49229",
+                    "24FEB26": "59182", 
+                    "30MAR26": "51714",
+                }
+                
+                # Extract date key
                 match = re.match(r'(\d{1,2})([A-Za-z]{3})(\d{2})', date_part)
                 if match:
                     day = match.group(1).zfill(2)
                     month = match.group(2).upper()
                     year = match.group(3)
+                    date_key = f"{day}{month}{year}"
                     
-                    # Flattrade format: NIFTY27JAN26F
+                    # Try known mapping first
+                    if date_key in known_futures:
+                        token = known_futures[date_key]
+                        print(f"✅ Using known token: {token} for {symbol}")
+                        return token
+                    
+                    # Otherwise search
                     search_str = f"NIFTY{day}{month}{year}F"
                     
-                    print(f"🔍 Searching for: {search_str}")
-                    res = self.api.searchscrip(exchange=exchange, searchtext=search_str)
+                    print(f"🔍 Searching NFO for: {search_str}")
+                    res = self.api.searchscrip(exchange="NFO", searchtext=search_str)  # Use NFO!
                     
                     if res and 'values' in res and len(res['values']) > 0:
                         token = res['values'][0]['token']
@@ -126,10 +147,22 @@ class FlattradeWrapper:
                         print(f"✅ Found: {tsym} (Token: {token})")
                         return token
                     else:
+                        # Fallback: broader search
+                        search_str2 = f"NIFTY {month}"
+                        print(f"🔍 Trying broader search: {search_str2}")
+                        res = self.api.searchscrip(exchange="NFO", searchtext=search_str2)
+                        if res and 'values' in res:
+                            for item in res['values']:
+                                if 'FUT' in item.get('tsym', ''):
+                                    token = item['token']
+                                    tsym = item.get('tsym', '')
+                                    print(f"✅ Found via fallback: {tsym} (Token: {token})")
+                                    return token
+                        
                         print(f"❌ No match for: {search_str}")
-                        print(f"   Response: {res}")
             except Exception as e:
                 print(f"❌ Future token error: {e}")
+                import traceback
                 traceback.print_exc()
                 
         # 3. Handle OPTIONS (e.g., NSE-NIFTY-06Jan26-24000-CE)
@@ -149,16 +182,16 @@ class FlattradeWrapper:
                     
                     search_str = f"NIFTY{day}{month}{year}{strike}{opt_type}"
                     
-                    print(f"🔍 Searching for: {search_str}")
-                    res = self.api.searchscrip(exchange=exchange, searchtext=search_str)
+                    print(f"🔍 Searching NFO for: {search_str}")
+                    res = self.api.searchscrip(exchange="NFO", searchtext=search_str)  # Use NFO!
                     
                     if res and 'values' in res and len(res['values']) > 0:
                         token = res['values'][0]['token']
                         print(f"✅ Found option token: {token}")
                         return token
+                        
             except Exception as e:
                 print(f"❌ Option token error: {e}")
-                traceback.print_exc()
                 
         return None
 
@@ -173,31 +206,43 @@ class FlattradeWrapper:
     def get_option_chain(self, exchange, underlying, expiry):
         """
         Fetch option chain from Flattrade.
-        Returns data in compatible format.
+        Returns data in Groww-compatible format.
         """
         try:
             # Convert expiry format: "2026-01-06" -> "06JAN26"
-            from datetime import datetime
             expiry_dt = datetime.strptime(expiry, "%Y-%m-%d")
-            expiry_str = expiry_dt.strftime("%d%b%y").upper()
+            day = expiry_dt.strftime("%d")
+            month = expiry_dt.strftime("%b").upper()
+            year = expiry_dt.strftime("%y")
             
-            # Flattrade option chain format
+            # Flattrade symbol format: NIFTY06JAN26
+            tradingsymbol = f"NIFTY{day}{month}{year}"
+            
+            print(f"📊 Fetching option chain for: {tradingsymbol}")
+            
+            # Correct API signature: (exchange, tradingsymbol, strikeprice, count)
             ret = self.api.get_option_chain(
-                exchange=exchange,
-                tradingsymbol=f"NIFTY{expiry_str}",
-                strikePrice="",
-                count="20"
+                exchange="NFO",  # Use NFO for options!
+                tradingsymbol=tradingsymbol,
+                strikeprice="",  # Empty = all strikes
+                count=50  # Number of strikes on each side
             )
             
             if not ret or 'values' not in ret:
+                print(f"❌ No option chain data received")
                 return {'strikes': {}}
             
-            # Convert to compatible format
+            print(f"✅ Received {len(ret['values'])} option entries")
+            
+            # Convert to Groww format
             strikes = {}
             for opt in ret['values']:
-                strike = opt.get('strprc', 0)
+                strike = int(opt.get('strprc', 0))
                 opt_type = opt.get('optt', '')  # 'CE' or 'PE'
                 
+                if strike == 0:
+                    continue
+                    
                 if strike not in strikes:
                     strikes[strike] = {}
                 
@@ -209,8 +254,11 @@ class FlattradeWrapper:
                     'token': opt.get('token', '')
                 }
             
+            print(f"✅ Processed {len(strikes)} unique strikes")
             return {'strikes': strikes}
             
         except Exception as e:
             print(f"❌ Option chain error: {e}")
+            import traceback
+            traceback.print_exc()
             return {'strikes': {}}
