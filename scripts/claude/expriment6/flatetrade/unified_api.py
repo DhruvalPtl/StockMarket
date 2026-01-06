@@ -1,23 +1,12 @@
 """
-UNIFIED API - DROP-IN REPLACEMENT FOR GROWW API
-================================================
-Supports both Groww and Flate Trade APIs with identical interface.
-Switch providers with a single parameter change.
-
-Key Features:
-- Same interface as Groww API
-- Automatic provider routing
-- Zero code changes needed in existing bots
-- Transparent switching between Groww and Flate Trade
+UNIFIED API - FLATTRADE WRAPPER
+================================
+Provides a consistent interface for Flattrade API.
+This maintains backward compatibility with existing code that uses UnifiedAPI.
 
 Usage:
-    # Instead of:
-    from growwapi import GrowwAPI
-    api = GrowwAPI(token)
-    
-    # Use:
     from unified_api import UnifiedAPI
-    api = UnifiedAPI(provider="groww")  # or provider="flate"
+    api = UnifiedAPI(user_id="FZ31397", user_token="your_token")
     
     # All existing code works unchanged!
     data = api.get_historical_candles(...)
@@ -29,14 +18,7 @@ Date: 2026-01-06
 import logging
 from typing import Dict, Optional, List, Any
 
-# Import both APIs
-try:
-    from growwapi import GrowwAPI
-    GROWW_AVAILABLE = True
-except ImportError:
-    GROWW_AVAILABLE = False
-    print("⚠️ Warning: Groww API not available")
-
+# Import Flattrade API
 try:
     from flate_api_adapter import FlateTradeAdapter
     FLATE_AVAILABLE = True
@@ -46,36 +28,29 @@ except ImportError:
         FLATE_AVAILABLE = True
     except ImportError:
         FLATE_AVAILABLE = False
-        print("⚠️ Warning: Flate Trade API not available")
+        print("⚠️ Warning: Flattrade API not available")
 
 
 class UnifiedAPI:
     """
-    Unified API that works with both Groww and Flate Trade.
+    Unified API that works with Flattrade.
     
-    This class provides a single interface that routes calls to the appropriate
-    API provider based on configuration. Existing code using Groww API can
-    switch to Flate Trade by changing just one parameter.
+    This class provides a single interface for Flattrade API.
+    Existing code can use this without changes.
     
     Example:
-        # Groww
-        api = UnifiedAPI(provider="groww", api_key=key, api_secret=secret)
-        
-        # Flate Trade
-        api = UnifiedAPI(provider="flate", user_id=uid, user_token=token)
-        
-        # Both work identically
+        api = UnifiedAPI(user_id=uid, user_token=token)
         candles = api.get_historical_candles("NSE", "CASH", "NSE-NIFTY", start, end, "1minute")
     """
     
-    # Class constants for exchange/segment codes (Groww format)
+    # Class constants for exchange/segment codes
     EXCHANGE_NSE = "NSE"
     EXCHANGE_BSE = "BSE"
     SEGMENT_CASH = "CASH"
     SEGMENT_FNO = "FNO"
     SEGMENT_INDEX = "INDEX"
     
-    # Interval constants (Groww format)
+    # Interval constants
     INTERVAL_1MIN = "1minute"
     INTERVAL_2MIN = "2minute"
     INTERVAL_3MIN = "3minute"
@@ -85,69 +60,29 @@ class UnifiedAPI:
     INTERVAL_60MIN = "60minute"
     INTERVAL_1DAY = "1day"
     
-    def __init__(self, provider: str = "groww", **kwargs):
+    def __init__(self, user_id: str = None, user_token: str = None, **kwargs):
         """
-        Initialize Unified API
+        Initialize Unified API with Flattrade
         
         Args:
-            provider: "groww" or "flate"
-            
-            For Groww:
-                api_key: Groww API key
-                api_secret: Groww API secret
-                OR
-                token: Pre-generated Groww token
-                
-            For Flate Trade:
-                user_id: Flate Trade user ID
-                user_token: Flate Trade authentication token
+            user_id: Flattrade user ID
+            user_token: Flattrade authentication token
         """
-        self.provider = provider.lower()
         self.api = None
         
         # Setup logging
         logging.basicConfig(level=logging.INFO)
         self.logger = logging.getLogger(__name__)
         
-        # Initialize the appropriate API
-        if self.provider == "groww":
-            self._init_groww(**kwargs)
-        elif self.provider == "flate":
-            self._init_flate(**kwargs)
-        else:
-            raise ValueError(f"Unknown provider: {provider}. Use 'groww' or 'flate'")
+        # Initialize Flattrade API
+        self._init_flate(user_id=user_id, user_token=user_token, **kwargs)
         
-        self.logger.info(f"✅ Unified API initialized with provider: {self.provider}")
-    
-    def _init_groww(self, **kwargs):
-        """Initialize Groww API"""
-        if not GROWW_AVAILABLE:
-            raise ImportError("Groww API not available. Install with: pip install growwapi")
-        
-        try:
-            # Check if token is provided directly
-            if 'token' in kwargs:
-                self.api = GrowwAPI(kwargs['token'])
-            # Or if API key/secret provided
-            elif 'api_key' in kwargs and 'api_secret' in kwargs:
-                token = GrowwAPI.get_access_token(
-                    api_key=kwargs['api_key'],
-                    secret=kwargs['api_secret']
-                )
-                self.api = GrowwAPI(token)
-            else:
-                raise ValueError("Provide either 'token' or 'api_key' and 'api_secret'")
-            
-            self.logger.info("✅ Groww API connected")
-            
-        except Exception as e:
-            self.logger.error(f"❌ Groww API initialization failed: {e}")
-            raise
+        self.logger.info(f"✅ Unified API initialized with Flattrade")
     
     def _init_flate(self, **kwargs):
-        """Initialize Flate Trade API"""
+        """Initialize Flattrade API"""
         if not FLATE_AVAILABLE:
-            raise ImportError("Flate Trade API not available")
+            raise ImportError("Flattrade API not available")
         
         try:
             if 'user_id' not in kwargs or 'user_token' not in kwargs:
