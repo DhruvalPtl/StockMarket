@@ -2,6 +2,8 @@ import logging
 import pandas as pd
 from datetime import datetime
 import time
+import re
+import traceback
 
 # Use the NorenApi you already have working
 from utils.NorenRestApiPy.NorenApi import NorenApi
@@ -106,7 +108,6 @@ class FlattradeWrapper:
                 
                 # Convert '27Jan26' to 'NIFTY27JAN26F' format
                 # Extract: day (27), month (Jan), year (26)
-                import re
                 match = re.match(r'(\d{1,2})([A-Za-z]{3})(\d{2})', date_part)
                 if match:
                     day = match.group(1).zfill(2)
@@ -129,7 +130,6 @@ class FlattradeWrapper:
                         print(f"   Response: {res}")
             except Exception as e:
                 print(f"❌ Future token error: {e}")
-                import traceback
                 traceback.print_exc()
                 
         # 3. Handle OPTIONS (e.g., NSE-NIFTY-06Jan26-24000-CE)
@@ -141,7 +141,6 @@ class FlattradeWrapper:
                 opt_type = parts[4]   # 'CE' or 'PE'
                 
                 # Convert to Flattrade format: NIFTY06JAN2624000CE
-                import re
                 match = re.match(r'(\d{1,2})([A-Za-z]{3})(\d{2})', date_part)
                 if match:
                     day = match.group(1).zfill(2)
@@ -159,6 +158,7 @@ class FlattradeWrapper:
                         return token
             except Exception as e:
                 print(f"❌ Option token error: {e}")
+                traceback.print_exc()
                 
         return None
 
