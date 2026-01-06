@@ -36,6 +36,7 @@ class FlattradeWrapper:
             # 1. Auto-detect correct exchange
             # SPOT (Index) = NSE, Futures/Options = NFO
             actual_exchange = exchange
+            # Options have format: NSE-NIFTY-06Jan26-24000-CE (5 parts, 4 dashes)
             if "FUT" in symbol or symbol.count('-') >= 4:  # Futures or Options
                 actual_exchange = "NFO"
                 print(f"🔄 Auto-routing to NFO exchange for {symbol}")
@@ -98,7 +99,6 @@ class FlattradeWrapper:
 
         except Exception as e:
             print(f"❌ Data Fetch Error: {e}")
-            import traceback
             traceback.print_exc()
             return {'candles': []}
 
@@ -114,7 +114,8 @@ class FlattradeWrapper:
                 parts = symbol.split('-')  # ['NSE', 'NIFTY', '27Jan26', 'FUT']
                 date_part = parts[2]  # '27Jan26'
                 
-                # Known tokens (from user's discovery)
+                # Known tokens for common expiries (from user testing)
+                # Format: "DDMMMYY" -> token
                 known_futures = {
                     "27JAN26": "49229",
                     "24FEB26": "59182", 
@@ -165,6 +166,7 @@ class FlattradeWrapper:
                 traceback.print_exc()
                 
         # 3. Handle OPTIONS (e.g., NSE-NIFTY-06Jan26-24000-CE)
+        # Options have 5 parts: exchange-underlying-date-strike-type (4 dashes)
         if symbol.count('-') >= 4:  # Option symbol
             try:
                 parts = symbol.split('-')  # ['NSE', 'NIFTY', '06Jan26', '24000', 'CE']
