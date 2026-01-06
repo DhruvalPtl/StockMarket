@@ -104,26 +104,61 @@ class FlattradeWrapper:
                 parts = symbol.split('-')  # ['NSE', 'NIFTY', '27Jan26', 'FUT']
                 date_part = parts[2]  # '27Jan26'
                 
-                # Extract day and month: '27Jan26' -> '27JAN'
+                # Convert '27Jan26' to 'NIFTY27JAN26F' format
+                # Extract: day (27), month (Jan), year (26)
                 import re
-                match = re.match(r'(\d{1,2})([A-Za-z]{3})', date_part)
+                match = re.match(r'(\d{1,2})([A-Za-z]{3})(\d{2})', date_part)
                 if match:
                     day = match.group(1).zfill(2)
                     month = match.group(2).upper()
-                    search_str = f"NIFTY {day}{month} FUT"
+                    year = match.group(3)
                     
-                    print(f"🔍 Searching: {search_str}")
+                    # Flattrade format: NIFTY27JAN26F
+                    search_str = f"NIFTY{day}{month}{year}F"
+                    
+                    print(f"🔍 Searching for: {search_str}")
                     res = self.api.searchscrip(exchange=exchange, searchtext=search_str)
                     
                     if res and 'values' in res and len(res['values']) > 0:
                         token = res['values'][0]['token']
-                        symbol_name = res['values'][0].get('tsym', '')
-                        print(f"✅ Found: {symbol_name} (Token: {token})")
+                        tsym = res['values'][0].get('tsym', '')
+                        print(f"✅ Found: {tsym} (Token: {token})")
                         return token
                     else:
                         print(f"❌ No match for: {search_str}")
+                        print(f"   Response: {res}")
             except Exception as e:
                 print(f"❌ Future token error: {e}")
+                import traceback
+                traceback.print_exc()
+                
+        # 3. Handle OPTIONS (e.g., NSE-NIFTY-06Jan26-24000-CE)
+        if symbol.count('-') >= 4:  # Option symbol
+            try:
+                parts = symbol.split('-')  # ['NSE', 'NIFTY', '06Jan26', '24000', 'CE']
+                date_part = parts[2]  # '06Jan26'
+                strike = parts[3]    # '24000'
+                opt_type = parts[4]   # 'CE' or 'PE'
+                
+                # Convert to Flattrade format: NIFTY06JAN2624000CE
+                import re
+                match = re.match(r'(\d{1,2})([A-Za-z]{3})(\d{2})', date_part)
+                if match:
+                    day = match.group(1).zfill(2)
+                    month = match.group(2).upper()
+                    year = match.group(3)
+                    
+                    search_str = f"NIFTY{day}{month}{year}{strike}{opt_type}"
+                    
+                    print(f"🔍 Searching for: {search_str}")
+                    res = self.api.searchscrip(exchange=exchange, searchtext=search_str)
+                    
+                    if res and 'values' in res and len(res['values']) > 0:
+                        token = res['values'][0]['token']
+                        print(f"✅ Found option token: {token}")
+                        return token
+            except Exception as e:
+                print(f"❌ Option token error: {e}")
                 
         return None
 
