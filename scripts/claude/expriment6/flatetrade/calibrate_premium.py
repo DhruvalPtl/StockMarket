@@ -14,9 +14,9 @@ sys.path.append(os.path.dirname(os.path.abspath(__file__)))
 
 try:
     from config import BotConfig, get_future_symbol
-    from growwapi import GrowwAPI
+    from utils.flattrade_wrapper import FlattradeWrapper
 except ImportError:
-    print("❌ Critical Error: Could not import config or growwapi.")
+    print("❌ Critical Error: Could not import config or flattrade_wrapper.")
     print("Make sure you run this from the experiment6 folder.")
     sys.exit(1)
 
@@ -25,8 +25,16 @@ def calibrate():
     print("===========================")
     
     # 1. Connect
-    print("🔑 Connecting to Groww...")
-    groww = GrowwAPI(BotConfig.API_KEY)
+    print("🔑 Connecting to Flattrade...")
+    api = FlattradeWrapper(
+        user_id=BotConfig.USER_ID,
+        user_token=BotConfig.USER_TOKEN
+    )
+    
+    if not api.is_connected:
+        print("❌ Connection Failed. Check your token in config.py")
+        print("💡 Run: python gettoken.py")
+        return
     
     # 2. Settings
     days_to_fetch = 10
@@ -37,7 +45,7 @@ def calibrate():
     
     # 3. Fetch Spot Data
     print(f"📊 Fetching NIFTY SPOT data (Last {days_to_fetch} days)...")
-    resp_spot = groww.get_historical_candles(
+    resp_spot = api.get_historical_candles(
         "NSE", "CASH", "NSE-NIFTY",
         start_dt.strftime("%Y-%m-%d %H:%M:%S"),
         end_dt.strftime("%Y-%m-%d %H:%M:%S"),
@@ -49,7 +57,7 @@ def calibrate():
         return
 
     df_spot = pd.DataFrame(resp_spot['candles'])
-    df_spot.columns = ['t', 'o', 'h', 'l', 'c', 'v'][:len(df_spot.columns)]
+    df_spot.columns = ['t', 'o', 'h', 'l', 'c', 'v', 'oi'][:len(df_spot.columns)]
     df_spot['t'] = pd.to_datetime(df_spot['t'])
     df_spot = df_spot.set_index('t')[['c']].rename(columns={'c': 'spot_close'})
 
@@ -58,7 +66,7 @@ def calibrate():
     fut_symbol = get_future_symbol(BotConfig.FUTURE_EXPIRY)
     print(f"📊 Fetching FUTURE data ({fut_symbol})...")
     
-    resp_fut = groww.get_historical_candles(
+    resp_fut = api.get_historical_candles(
         "NSE", "FNO", fut_symbol,
         start_dt.strftime("%Y-%m-%d %H:%M:%S"),
         end_dt.strftime("%Y-%m-%d %H:%M:%S"),

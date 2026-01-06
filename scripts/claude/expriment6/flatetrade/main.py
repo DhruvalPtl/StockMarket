@@ -103,27 +103,25 @@ def run_test_mode():
     # ====================================================================
     print("\n2️⃣  Testing API Connection...")
     try:
-        from growwapi import GrowwAPI
-        
-        print(f"   🔑 Authenticating with Groww API...")
-        token = GrowwAPI.get_access_token(
-            api_key=BotConfig.API_KEY,
-            secret=BotConfig.API_SECRET
+        print(f"   🔑 Connecting to Flattrade API...")
+        api = FlattradeWrapper(
+            user_id=BotConfig.USER_ID,
+            user_token=BotConfig.USER_TOKEN
         )
-        groww = GrowwAPI(token)
-        print("   ✅ API Authentication successful")
         
-    except ImportError:  
-        print("   ❌ growwapi package not installed")
-        print("\n🛑 RUN:   pip install growwapi")
-        return False
+        if not api.is_connected:
+            print("   ❌ Flattrade connection failed")
+            return False
+            
+        print("   ✅ Flattrade API connected successfully")
+        
     except Exception as e:
-        print(f"   ❌ API Authentication FAILED: {e}")
+        print(f"   ❌ API Connection FAILED: {e}")
         print("\n🛑 POSSIBLE CAUSES:")
-        print("      1.Invalid/Expired API token")
-        print("      2.Wrong API_KEY or API_SECRET in config.py")
-        print("      3.Network connection issue")
-        print("\n💡 ACTION: Get new API token from Groww and update config.py")
+        print("      1. Invalid/Expired token")
+        print("      2. Wrong USER_ID or USER_TOKEN in config.py")
+        print("      3. Network connection issue")
+        print("\n💡 ACTION: Run gettoken.py to generate a new token")
         return False
     
     # ====================================================================
@@ -132,7 +130,7 @@ def run_test_mode():
     print("\n3️⃣  Testing Live Market Data Fetch...")
     try:
         print("   📡 Fetching live Nifty spot quote...")
-        spot_quote = groww.get_quote("NIFTY", "NSE", "CASH")
+        spot_quote = api.get_quote("NSE-NIFTY")
         
         if not spot_quote or 'last_price' not in spot_quote: 
             print(f"   ❌ Invalid spot quote response: {spot_quote}")
@@ -163,8 +161,8 @@ def run_test_mode():
         
         print(f"   Initializing Data Engine...")
         engine = DataEngine(
-            api_key=BotConfig.API_KEY,
-            api_secret=BotConfig.API_SECRET,
+            api_key=BotConfig.USER_ID,
+            api_secret=BotConfig.USER_TOKEN,
             option_expiry=BotConfig.OPTION_EXPIRY,
             future_expiry=BotConfig.FUTURE_EXPIRY,
             fut_symbol=fut_symbol,

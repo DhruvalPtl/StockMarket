@@ -30,59 +30,73 @@ class FlattradeWrapper:
         Translates Flattrade data to the format your bot needs.
         """
         try:
-            # 1. Map Timeframe
-            # Groww uses '1minute', Flattrade uses '1'
-            tf_map = {'1minute': '1', '3minute': '3', '5minute': '5', '15minute': '15'}
+            # 1. Map Timeframe - Flattrade uses numbers
+            tf_map = {
+                '1minute': '1', 
+                '2minute': '2',
+                '3minute': '3', 
+                '5minute': '5', 
+                '15minute': '15',
+                '30minute': '30',
+                '60minute': '60'
+            }
             tf = tf_map.get(interval, '1')
             
-            # 2. Get Token (CRITICAL STEP)
-            # We must find the numeric 'token' (e.g., 26000 for Nifty)
+            # 2. Get Token
             token = self._get_token(symbol, exchange)
             if not token:
                 print(f"⚠️ Token not found for {symbol}")
                 return {'candles': []}
 
-            # 3. Convert Time to Epoch (Seconds)
-            # start_time comes as "2025-01-05 09:15:00"
+            # 3. Convert Time to Epoch
             start_dt = datetime.strptime(start_time, "%Y-%m-%d %H:%M:%S")
             start_epoch = str(int(start_dt.timestamp()))
             
             # 4. Fetch Data
-            # Note: Flattrade returns: time, into (open), inth (high), intl (low), intc (close)
-            ret = self.api.get_time_price_series(exchange=exchange, token=token, starttime=start_epoch, interval=tf)
+            ret = self.api.get_time_price_series(
+                exchange=exchange, 
+                token=token, 
+                starttime=start_epoch, 
+                interval=tf
+            )
             
             if not ret:
                 return {'candles': []}
                 
-            # 5. Convert to List of Dicts (Groww Format)
+            # 5. Convert to compatible format
             candles = []
             for c in ret:
-                # Flattrade time format: "05-01-2026 09:15:00"
-                c_time_str = c.get('time')
-                c_dt = datetime.strptime(c_time_str, "%d-%m-%Y %H:%M:%S")
-                
-                candles.append({
-                    't': c_dt,
-                    'o': float(c.get('into')),
-                    'h': float(c.get('inth')),
-                    'l': float(c.get('intl')),
-                    'c': float(c.get('intc')),
-                    'v': int(c.get('intv', 0))
-                })
-                
-            # Sort just in case
+                try:
+                    c_time_str = c.get('time')
+                    c_dt = datetime.strptime(c_time_str, "%d-%m-%Y %H:%M:%S")
+                    
+                    candles.append({
+                        't': c_dt,
+                        'o': float(c.get('into', 0)),
+                        'h': float(c.get('inth', 0)),
+                        'l': float(c.get('intl', 0)),
+                        'c': float(c.get('intc', 0)),
+                        'v': int(c.get('intv', 0)),
+                        'oi': int(c.get('intoi', 0))  # Add OI for futures
+                    })
+                except Exception as e:
+                    print(f"⚠️ Skipping candle due to error: {e}")
+                    continue
+                    
             candles.sort(key=lambda x: x['t'])
             return {'candles': candles}
 
         except Exception as e:
             print(f"❌ Data Fetch Error: {e}")
+            import traceback
+            traceback.print_exc()
             return {'candles': []}
 
     def _get_token(self, symbol, exchange):
         """Helper to find the numeric token for a symbol"""
         # 1. Handle NIFTY SPOT
         if symbol == "NSE-NIFTY" or symbol == "NIFTY":
-            return "26000"  # Nifty 50 Token
+            return "26000"  # Nifty 50 Index Token
             
         # 2. Handle NIFTY FUTURES (e.g., NSE-NIFTY-27Jan26-FUT)
         if "FUT" in symbol:
@@ -90,8 +104,7 @@ class FlattradeWrapper:
                 parts = symbol.split('-')  # ['NSE', 'NIFTY', '27Jan26', 'FUT']
                 date_part = parts[2]  # '27Jan26'
                 
-                # Convert '27Jan26' to '27JAN' for search
-                # Extract day and month
+                # Extract day and month: '27Jan26' -> '27JAN'
                 import re
                 match = re.match(r'(\d{1,2})([A-Za-z]{3})', date_part)
                 if match:
@@ -99,17 +112,18 @@ class FlattradeWrapper:
                     month = match.group(2).upper()
                     search_str = f"NIFTY {day}{month} FUT"
                     
-                    print(f"🔍 Searching Flattrade for: {search_str}")
+                    print(f"🔍 Searching: {search_str}")
                     res = self.api.searchscrip(exchange=exchange, searchtext=search_str)
                     
                     if res and 'values' in res and len(res['values']) > 0:
                         token = res['values'][0]['token']
-                        print(f"✅ Found token: {token} for {symbol}")
+                        symbol_name = res['values'][0].get('tsym', '')
+                        print(f"✅ Found: {symbol_name} (Token: {token})")
                         return token
                     else:
-                        print(f"❌ No results for {search_str}")
+                        print(f"❌ No match for: {search_str}")
             except Exception as e:
-                print(f"❌ Token search error: {e}")
+                print(f"❌ Future token error: {e}")
                 
         return None
 
@@ -124,7 +138,7 @@ class FlattradeWrapper:
     def get_option_chain(self, exchange, underlying, expiry):
         """
         Fetch option chain from Flattrade.
-        Returns data in Groww-compatible format.
+        Returns data in compatible format.
         """
         try:
             # Convert expiry format: "2026-01-06" -> "06JAN26"
@@ -143,7 +157,7 @@ class FlattradeWrapper:
             if not ret or 'values' not in ret:
                 return {'strikes': {}}
             
-            # Convert to Groww format
+            # Convert to compatible format
             strikes = {}
             for opt in ret['values']:
                 strike = opt.get('strprc', 0)
