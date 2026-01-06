@@ -27,8 +27,16 @@ class BotConfig:
     # ============================================================
     # 1.API CREDENTIALS & CONNECTION
     # ============================================================
-    API_KEY = "eyJraWQiOiJaTUtjVXciLCJhbGciOiJFUzI1NiJ9.eyJleHAiOjI1NTU4NjEzMzUsImlhdCI6MTc2NzQ2MTMzNSwibmJmIjoxNzY3NDYxMzM1LCJzdWIiOiJ7XCJ0b2tlblJlZklkXCI6XCJjOTQyMDNkYS00MDQ4LTQ5OGYtODBlMS0wZWU0ZTA1OWU4NGVcIixcInZlbmRvckludGVncmF0aW9uS2V5XCI6XCJlMzFmZjIzYjA4NmI0MDZjODg3NGIyZjZkODQ5NTMxM1wiLFwidXNlckFjY291bnRJZFwiOlwiMDdmMDA0MGMtZTk4Zi00ZDNmLTk5Y2EtZDc1ZjBlYWU5M2NlXCIsXCJkZXZpY2VJZFwiOlwiZDMyMWIxMzUtZWQ5Mi01ZWJkLWJjMDUtZTY1NDY2OWRiMDM5XCIsXCJzZXNzaW9uSWRcIjpcIjNjZmFlMDU3LWIyNTEtNDdjYS05MGM1LTkyYmZkY2M1NWFkZFwiLFwiYWRkaXRpb25hbERhdGFcIjpcIno1NC9NZzltdjE2WXdmb0gvS0EwYk1yOE5XVzhzdTNvZ080am1ZUzIwZEpSTkczdTlLa2pWZDNoWjU1ZStNZERhWXBOVi9UOUxIRmtQejFFQisybTdRPT1cIixcInJvbGVcIjpcImF1dGgtdG90cFwiLFwic291cmNlSXBBZGRyZXNzXCI6XCIyNDA5OjQwOTA6MTA4ZjpkYzA1OjY1OWY6NDQxODo4NmQ6NWUwYywxNzIuNzAuMTkxLjE3MywzNS4yNDEuMjMuMTIzXCIsXCJ0d29GYUV4cGlyeVRzXCI6MjU1NTg2MTMzNTIxMX0iLCJpc3MiOiJhcGV4LWF1dGgtcHJvZC1hcHAifQ.-vlexEi6oglfAlbHgDWWj09TMl3wNhUz--ywOAskAP6L4No-KNpAkJYbEVVjD-dmq9zvzXK5S38plZFlayxX2g"
-    API_SECRET = "ydGmCf^ik0eHA6eMZaO#hnwJlqTm6GU5"
+    
+    # GROWW API CREDENTIALS
+    # Get your API credentials from Groww Developer Portal
+    # https://groww.in/developer
+    GROWW_API_KEY = "eyJraWQiOiJaTUtjVXciLCJhbGciOiJFUzI1NiJ9.eyJleHAiOjI1NTU4NjEzMzUsImlhdCI6MTc2NzQ2MTMzNSwibmJmIjoxNzY3NDYxMzM1LCJzdWIiOiJ7XCJ0b2tlblJlZklkXCI6XCJjOTQyMDNkYS00MDQ4LTQ5OGYtODBlMS0wZWU0ZTA1OWU4NGVcIixcInZlbmRvckludGVncmF0aW9uS2V5XCI6XCJlMzFmZjIzYjA4NmI0MDZjODg3NGIyZjZkODQ5NTMxM1wiLFwidXNlckFjY291bnRJZFwiOlwiMDdmMDA0MGMtZTk4Zi00ZDNmLTk5Y2EtZDc1ZjBlYWU5M2NlXCIsXCJkZXZpY2VJZFwiOlwiZDMyMWIxMzUtZWQ5Mi01ZWJkLWJjMDUtZTY1NDY2OWRiMDM5XCIsXCJzZXNzaW9uSWRcIjpcIjNjZmFlMDU3LWIyNTEtNDdjYS05MGM1LTkyYmZkY2M1NWFkZFwiLFwiYWRkaXRpb25hbERhdGFcIjpcIno1NC9NZzltdjE2WXdmb0gvS0EwYk1yOE5XVzhzdTNvZ080am1ZUzIwZEpSTkczdTlLa2pWZDNoWjU1ZStNZERhWXBOVi9UOUxIRmtQejFFQisybTdRPT1cIixcInJvbGVcIjpcImF1dGgtdG90cFwiLFwic291cmNlSXBBZGRyZXNzXCI6XCIyNDA5OjQwOTA6MTA4ZjpkYzA1OjY1OWY6NDQxODo4NmQ6NWUwYywxNzIuNzAuMTkxLjE3MywzNS4yNDEuMjMuMTIzXCIsXCJ0d29GYUV4cGlyeVRzXCI6MjU1NTg2MTMzNTIxMX0iLCJpc3MiOiJhcGV4LWF1dGgtcHJvZC1hcHAifQ.-vlexEi6oglfAlbHgDWWj09TMl3wNhUz--ywOAskAP6L4No-KNpAkJYbEVVjD-dmq9zvzXK5S38plZFlayxX2g"
+    GROWW_API_SECRET = "ydGmCf^ik0eHA6eMZaO#hnwJlqTm6GU5"
+    
+    # Legacy API_KEY/API_SECRET for backwards compatibility (points to Groww)
+    API_KEY = GROWW_API_KEY
+    API_SECRET = GROWW_API_SECRET
     
     # Rate Limiting (Seconds between calls)
     RATE_LIMIT_SPOT = 0.5
@@ -383,3 +391,54 @@ def get_option_symbol(strike:  int, option_type: str, expiry_date: str) -> str:
     except Exception as e:
         print(f"❌ Error generating option symbol: {e}")
         return "ERROR_SYMBOL"
+
+
+# ============================================================
+# ADDITIONAL UNIFIED API CONFIGURATION
+# ============================================================
+
+class UnifiedConfig:
+    """
+    Configuration for unified API that supports both Groww and Flate Trade.
+    This allows seamless switching between providers.
+    """
+    
+    # Default provider: "groww" or "flate"
+    DEFAULT_PROVIDER = "groww"
+    
+    # Lot sizes
+    NIFTY_LOT_SIZE = 75
+    BANKNIFTY_LOT_SIZE = 30
+    
+    # Timeframe mapping between Groww and Flate Trade
+    TIMEFRAME_MAPPING = {
+        "groww": {
+            "1minute": "1minute",
+            "2minute": "2minute", 
+            "3minute": "3minute",
+            "5minute": "5minute",
+            "15minute": "15minute",
+            "30minute": "30minute",
+            "60minute": "60minute",
+            "1day": "1day"
+        },
+        "flate": {
+            "1minute": "1",
+            "2minute": "2",
+            "3minute": "3", 
+            "5minute": "5",
+            "15minute": "15",
+            "30minute": "30",
+            "60minute": "60",
+            "1day": "1440"
+        }
+    }
+    
+    # Symbol format examples:
+    # Groww Spot: "NSE-NIFTY"
+    # Groww Future: "NSE-NIFTY-27Jan26-FUT"
+    # Groww Option: "NSE-NIFTY-06Jan26-24000-CE"
+    # 
+    # Flate Spot: Token "26000" (Nifty 50)
+    # Flate Future: Search for "NIFTY 27JAN FUT"
+    # Flate Option: Search for "NIFTY 06JAN 24000 CE"
