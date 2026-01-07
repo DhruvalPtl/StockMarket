@@ -408,11 +408,22 @@ class StrategyRunner:
         
         pos = self.active_position
         
-        # Get current price
+        # Get current price (will fetch directly from API if needed)
         current_price = self.engine.get_option_price(pos['strike'], pos['type'])
         
         if current_price <= 0.1:
-            return  # Don't act on zero price
+            # Strike data unavailable - likely API issue
+            # Wait a few cycles before force exiting
+            time_in_position = (datetime.now() - pos['entry_time']).total_seconds()
+            max_wait_seconds = 180  # 3 minutes (reduced from 5)
+            
+            if time_in_position > max_wait_seconds:
+                print(f"⚠️ [{self.strategy_name}] Strike {pos['strike']} {pos['type']} unavailable for {int(time_in_position)}s - Force exiting at entry")
+                self.exit_position("API_FAILURE", pos['entry_price'])
+                return
+            
+            # Skip this cycle, will retry next tick
+            return
         
         # Update risk manager
         self.risk_manager.update_position(self.position_id, current_price)

@@ -275,13 +275,46 @@ class DataEngine:
             
         Returns:
             LTP or 0 if not found
+            
+        NOTE: For position strikes, fetches directly from API if not in strikes_data
+        This handles ATM shift where position strike is out of option chain range
         """
+        # Try strikes_data first (fast path)
         if strike in self.strikes_data:
             data = self.strikes_data[strike]
             if option_type == 'CE': 
                 return data.ce_ltp
             else: 
                 return data.pe_ltp
+        
+        # ⚠️ CRITICAL: Strike not in cached data (ATM shifted)
+        # For active positions, fetch price directly from API
+        if strike in self.active_monitoring_strikes:
+            try:
+                # Get the option symbol and token
+                expiry_dt = datetime.strptime(self.option_expiry, "%Y-%m-%d")
+                day = expiry_dt.strftime("%d")
+                month = expiry_dt.strftime("%b").upper()
+                year = expiry_dt.strftime("%y")
+                
+                option_symbol = f"NIFTY{day}{month}{year}{'C' if option_type == 'CE' else 'P'}{int(strike)}"
+                
+                # Search for the option token
+                search_result = self.api.api.searchscrip(exchange="NFO", searchtext=option_symbol)
+                if search_result and 'values' in search_result and len(search_result['values']) > 0:
+                    token = search_result['values'][0]['token']
+                    
+                    # Get live quote
+                    quote_data = self.api.api.get_quotes(exchange='NFO', token=token)
+                    if quote_data and 'lp' in quote_data:
+                        price = float(quote_data.get('lp', 0))
+                        if price > 0.1:
+                            print(f"📡 Fetched {option_symbol} directly: ₹{price:.2f}")
+                            return price
+            except Exception as e:
+                print(f"⚠️ Failed to fetch {strike} {option_type} directly: {e}")
+        
+        # Strike not found and not a monitored position
         return 0.0
     
     def get_strike_data(self, strike: int) -> Optional[StrikeOIData]: 
@@ -290,7 +323,15 @@ class DataEngine:
     
     def get_affordable_strike(self, option_type: str, max_cost: float) -> Optional[StrikeOIData]:
         """
-        Finds the best affordable strike.
+        Finds the best affordable strike with OTM limit but unlimited ITM.
+        
+        Rules:
+        - OTM Limit: Max 2 strikes away (+50, +100 for CE | -50, -100 for PE)
+        - ITM Limit: Unlimited (can go deep ITM as long as premium ≥ ₹80 and within budget)
+        - Min Premium: ₹80
+        - Max Premium: Budget limit
+        
+        Preference: ATM → OTM+1 → OTM+2 → ITM-1 → ITM-2 → ITM-3...
         
         Args:
             option_type: 'CE' or 'PE'
@@ -300,23 +341,50 @@ class DataEngine:
             StrikeOIData or None
         """
         lot_size = BotConfig.Risk.LOT_SIZE
+        MIN_PREMIUM = 80.0  # Minimum acceptable premium
         
-        # Preference order: ATM -> OTM1 -> OTM2
+        candidates = []
+        
         if option_type == 'CE':
-            candidates = [self.atm_strike, self.atm_strike + 50, self.atm_strike + 100]
-        else: 
-            candidates = [self.atm_strike, self.atm_strike - 50, self.atm_strike - 100]
+            # ATM → OTM (max 2) → ITM (unlimited)
+            candidates.append(self.atm_strike)
+            candidates.append(self.atm_strike + 50)   # OTM+1
+            candidates.append(self.atm_strike + 100)  # OTM+2
+            
+            # ITM: Unlimited depth (26050, 26000, 25950...)
+            itm_strike = self.atm_strike - 50
+            while itm_strike in self.strikes_data:
+                candidates.append(itm_strike)
+                itm_strike -= 50
+                
+        else:  # PE
+            # ATM → OTM (max 2) → ITM (unlimited)
+            candidates.append(self.atm_strike)
+            candidates.append(self.atm_strike - 50)   # OTM+1
+            candidates.append(self.atm_strike - 100)  # OTM+2
+            
+            # ITM: Unlimited depth (26150, 26200, 26250...)
+            itm_strike = self.atm_strike + 50
+            while itm_strike in self.strikes_data:
+                candidates.append(itm_strike)
+                itm_strike += 50
         
+        # Find first strike meeting all criteria
         for strike in candidates:
             if strike in self.strikes_data:
                 data = self.strikes_data[strike]
                 price = data.ce_ltp if option_type == 'CE' else data.pe_ltp
                 
-                if price > 0.1:  # Valid price
-                    cost = price * lot_size
-                    if cost <= max_cost:
-                        return data
+                # Must meet minimum premium requirement
+                if price < MIN_PREMIUM:
+                    continue
+                
+                # Must be within budget
+                cost = price * lot_size
+                if cost <= max_cost:
+                    return data
         
+        # No affordable strike found
         return None
     
     def get_candle_history(self, count: int = 50) -> List[CandleData]: 

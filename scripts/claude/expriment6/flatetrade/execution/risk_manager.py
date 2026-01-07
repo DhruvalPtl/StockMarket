@@ -99,6 +99,8 @@ class RiskManager:
         self.max_daily_trades = config.Risk.MAX_DAILY_TRADES
         self.max_daily_loss = config.Risk.MAX_DAILY_LOSS
         self.daily_loss_action = config.Risk.MAX_DAILY_LOSS_ACTION  # "HALT" or "LOG"
+        self.auto_reset_on_daily_loss = getattr(config.Risk, 'AUTO_RESET_ON_DAILY_LOSS', False)
+        self.reset_cooldown_minutes = getattr(config.Risk, 'RESET_COOLDOWN_MINUTES', 0)
         
         # Capital settings
         self.capital_per_strategy = config.Risk.CAPITAL_PER_STRATEGY
@@ -124,6 +126,14 @@ class RiskManager:
         # Halt flag
         self.is_halted = False
         self.halt_reason = ""
+        self.halt_time: Optional[datetime] = None
+        self.reset_count = 0
+
+        # Logging setup
+        root_dir = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+        self.logs_dir = os.path.join(root_dir, 'logs')
+        os.makedirs(self.logs_dir, exist_ok=True)
+        self.reset_log_path = os.path.join(self.logs_dir, 'daily_loss_resets.log')
     
     def check_trade(self, agg_signal: AggregatedSignal, 
                     proposed_strike: int,
@@ -264,6 +274,9 @@ class RiskManager:
     def _check_daily_limits(self) -> RiskDecision: 
         """Checks daily trading limits."""
         warnings = []
+
+        # Attempt auto reset if previously halted
+        self._attempt_auto_reset()
         
         # Check trade count
         if self.daily_stats.trades_taken >= self.max_daily_trades: 
@@ -279,17 +292,33 @@ class RiskManager:
         
         # Check daily loss
         if self.daily_stats.net_pnl < -self.max_daily_loss:
+            loss_amt = abs(self.daily_stats.net_pnl)
             if self.daily_loss_action == "HALT":
-                self.is_halted = True
-                self.halt_reason = f"Daily loss limit hit (₹{abs(self.daily_stats.net_pnl):.0f})"
-                return RiskDecision(
-                    action=RiskAction.BLOCK,
-                    reason=self.halt_reason,
-                    adjusted_size_multiplier=0,
-                    allowed_capital=0
-                )
+                if not self.is_halted:
+                    self.is_halted = True
+                    self.halt_reason = f"Daily loss limit hit (₹{loss_amt:.0f})"
+                    self.halt_time = datetime.now()
+                    self._log_event(f"HALT: {self.halt_reason}")
+                    # Immediate auto reset if enabled and cooldown is zero
+                    if self.auto_reset_on_daily_loss and self.reset_cooldown_minutes == 0:
+                        self._reset_session()
+                        return RiskDecision(
+                            action=RiskAction.ALLOW,
+                            reason="Session auto-reset after daily loss",
+                            adjusted_size_multiplier=1.0,
+                            allowed_capital=0,
+                            warnings=[f"Auto-reset after loss ₹{loss_amt:.0f}"]
+                        )
+                # If halted and waiting for cooldown, block trades
+                if self.is_halted:
+                    return RiskDecision(
+                        action=RiskAction.BLOCK,
+                        reason=self.halt_reason,
+                        adjusted_size_multiplier=0,
+                        allowed_capital=0
+                    )
             else:
-                warnings.append(f"⚠️ Daily loss limit exceeded (₹{abs(self.daily_stats.net_pnl):.0f})")
+                warnings.append(f"⚠️ Daily loss limit exceeded (₹{loss_amt:.0f})")
         
         # Warn if approaching loss limit
         if self.daily_stats.net_pnl < -self.max_daily_loss * 0.7:
@@ -302,6 +331,45 @@ class RiskManager:
             allowed_capital=0,
             warnings=warnings
         )
+
+    def _attempt_auto_reset(self):
+        """Attempts auto reset after cooldown if halted."""
+        if not self.is_halted or not self.auto_reset_on_daily_loss:
+            return
+        if self.reset_cooldown_minutes <= 0:
+            return  # handled immediately in _check_daily_limits
+        if self.halt_time and (datetime.now() - self.halt_time).total_seconds() >= self.reset_cooldown_minutes * 60:
+            self._reset_session()
+
+    def _reset_session(self):
+        """Resets session stats to allow trading again with fresh capital."""
+        # Keep cumulative stats but reset session-related counters
+        self.reset_count += 1
+        self._log_event(
+            f"RESET: Session #{self.reset_count} at ₹{self.daily_stats.net_pnl:+,.2f}; restarting with fresh capital"
+        )
+        # Reset net PnL and trade counters for new session
+        self.daily_stats.net_pnl = 0.0
+        self.daily_stats.gross_pnl = 0.0
+        self.daily_stats.trades_taken = 0
+        self.daily_stats.trades_won = 0
+        self.daily_stats.trades_lost = 0
+        self.daily_stats.peak_pnl = 0.0
+        self.daily_stats.max_drawdown = 0.0
+        # Clear halt
+        self.is_halted = False
+        self.halt_reason = ""
+        self.halt_time = None
+
+    def _log_event(self, message: str):
+        """Logs reset/halting events to a file with timestamp."""
+        try:
+            ts = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
+            with open(self.reset_log_path, 'a', encoding='utf-8') as f:
+                f.write(f"[{ts}] {message}\n")
+        except Exception:
+            # Silent failure to avoid impacting trading loop
+            pass
     
     def _adjust_for_volatility(self, size_mult: float, atr: float) -> float:
         """

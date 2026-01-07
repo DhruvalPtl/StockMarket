@@ -20,7 +20,7 @@ class BotConfig:
     # ============================================================
     BROKER = "FLATTRADE"
     USER_ID = "FZ31397"  # Your Flattrade user ID
-    USER_TOKEN = "a318678a850c0467132b857b2f8ab38811708d950c3a68d54029d94b2bd875a9"  # Your token
+    USER_TOKEN = "1d08b534addf33990dd6913fb011bbc5d42afbf30d08f2a6411ce5076266db31"  # Your token
 
 
     
@@ -32,7 +32,7 @@ class BotConfig:
     # ============================================================
     # 2.CONTRACT DETAILS
     # ============================================================
-    OPTION_EXPIRY = "2026-01-06"      # Weekly options expiry
+    OPTION_EXPIRY = "2026-01-13"      # Weekly options expiry (Updated from search)
     FUTURE_EXPIRY = "2026-01-27"      # Monthly futures expiry
     
     # ============================================================
@@ -155,8 +155,11 @@ class BotConfig:
         
         # Daily Limits
         MAX_DAILY_TRADES = 1000            # Circuit breaker
-        MAX_DAILY_LOSS = 5000            # Stop trading if hit (optional)
-        MAX_DAILY_LOSS_ACTION = "LOG"    # "HALT" or "LOG"
+        MAX_DAILY_LOSS = 1000           # Stop trading if hit (per session)
+        MAX_DAILY_LOSS_ACTION = "HALT"   # "HALT" or "LOG"
+        # Auto reset settings
+        AUTO_RESET_ON_DAILY_LOSS = True  # Automatically restart trading session
+        RESET_COOLDOWN_MINUTES = 0       # Wait before restart (0 = immediate)
         
         # Costs
         BROKERAGE_PER_ORDER = 20.0
@@ -268,7 +271,7 @@ class BotConfig:
     DEBUG_MODE = False
     VERBOSE_LOGGING = True
     
-    BASE_LOG_PATH = r"D:\\StockMarket\\StockMarket\\scripts\\claude\\expriment6\\log"
+    BASE_LOG_PATH = r"D:\\StockMarket\\StockMarket\\scripts\\claude\\expriment6\\flatetrade\\log"
     
     @classmethod
     def get_log_paths(cls) -> Dict[str, str]: 

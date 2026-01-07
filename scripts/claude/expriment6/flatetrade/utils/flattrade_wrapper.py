@@ -204,10 +204,13 @@ class FlattradeWrapper:
                 return {'last_price': float(res['lp'])}
         return {'last_price': 0.0}
 
-    def get_option_chain(self, exchange, underlying, expiry):
+    def get_option_chain(self, exchange, underlying, expiry, center_strike=None):
         """
-        Fetch option chain from Flattrade.
+        Fetch option chain from Flattrade with live quotes.
         Returns data in Groww-compatible format.
+        
+        NOTE: Flattrade API requires a SPECIFIC OPTION CONTRACT to fetch the chain.
+        It returns options around that contract's strike.
         """
         try:
             # Convert expiry format: "2026-01-06" -> "06JAN26"
@@ -216,51 +219,86 @@ class FlattradeWrapper:
             month = expiry_dt.strftime("%b").upper()
             year = expiry_dt.strftime("%y")
             
-            # Flattrade symbol format: NIFTY06JAN26
-            tradingsymbol = f"NIFTY{day}{month}{year}"
+            # Get spot price to determine ATM strike
+            print(f"📊 Fetching option chain for expiry: {expiry}")
+            quote = self.get_quote("NSE-NIFTY")
+            spot_price = quote.get('last_price', 26000) if quote else 26000
             
-            print(f"📊 Fetching option chain for: {tradingsymbol}")
+            # Use center_strike if provided, otherwise use ATM
+            if center_strike is None:
+                # Round to nearest 50 for NIFTY (standard strike spacing)
+                center_strike = round(spot_price / 50) * 50
             
-            # Correct API signature: (exchange, tradingsymbol, strikeprice, count)
+            print(f"   Spot: ₹{spot_price:.2f}, ATM Strike: ₹{center_strike:.0f}")
+            
+            # CRITICAL: Must pass a SPECIFIC OPTION CONTRACT, not just the underlying!
+            # Format: NIFTY13JAN26C26000 (with option type and strike)
+            ce_symbol = f"NIFTY{day}{month}{year}C{int(center_strike)}"
+            
+            print(f"   Fetching chain for: {ce_symbol}")
+            
+            # Call with specific option contract and the strike price
             ret = self.api.get_option_chain(
-                exchange="NFO",  # Use NFO for options!
-                tradingsymbol=tradingsymbol,
-                strikeprice="",  # Empty = all strikes
-                count=50  # Number of strikes on each side
+                exchange="NFO",
+                tradingsymbol=ce_symbol,  # SPECIFIC OPTION CONTRACT
+                strikeprice=str(int(center_strike)),  # Center strike
+                count=50  # Number of strikes to fetch (API returns up to 50 around center)
             )
             
             if not ret or 'values' not in ret:
-                print(f"❌ No option chain data received")
+                print(f"❌ No option chain data received for {ce_symbol}")
+                print(f"   Try a different strike price or expiry date")
                 return {'strikes': {}}
             
-            print(f"✅ Received {len(ret['values'])} option entries")
+            print(f"✅ Received {len(ret['values'])} option contracts")
+            print(f"📈 Fetching live quotes for {len(ret['values'])} options...")
             
             # Convert to Groww format
             strikes = {}
-            for opt in ret['values']:
+            for idx, opt in enumerate(ret['values']):
                 strike_str = opt.get('strprc', '0')
                 try:
                     strike = float(strike_str)
-                    # For NIFTY, strikes are whole numbers, but keep as float for safety
                     if strike == 0:
                         continue
                 except (ValueError, TypeError):
                     continue
                     
                 opt_type = opt.get('optt', '')  # 'CE' or 'PE'
+                token = opt.get('token', '')
                 
                 if strike not in strikes:
                     strikes[strike] = {}
                 
+                # Get live quote for this option
+                ltp = 0
+                oi = 0
+                volume = 0
+                try:
+                    quote_data = self.api.get_quotes(exchange='NFO', token=token)
+                    if quote_data:
+                        ltp = float(quote_data.get('lp', 0))
+                        oi = int(quote_data.get('oi', 0))
+                        volume = int(quote_data.get('volume', 0)) if 'volume' in quote_data else 0
+                except Exception as e:
+                    # If quote fetch fails, use default values
+                    pass
+                
                 strikes[strike][opt_type] = {
                     'symbol': opt.get('tsym', ''),
-                    'ltp': float(opt.get('lp', 0)),
-                    'oi': int(opt.get('oi', 0)),
-                    'volume': int(opt.get('v', 0)),
-                    'token': opt.get('token', '')
+                    'ltp': ltp,
+                    'oi': oi,
+                    'open_interest': oi,
+                    'volume': volume,
+                    'greeks': {},
+                    'token': token
                 }
+                
+                # Progress indicator
+                if (idx + 1) % 20 == 0:
+                    print(f"   Fetched {idx + 1}/{len(ret['values'])} quotes...")
             
-            print(f"✅ Processed {len(strikes)} unique strikes")
+            print(f"✅ Processed {len(strikes)} unique strikes with live data")
             return {'strikes': strikes}
             
         except Exception as e:

@@ -64,19 +64,6 @@ def main():
     
     print("✅ Connected!\n")
     
-    # Example searches
-    examples = [
-        ("NFO", "NIFTY 27JAN FUT"),
-        ("NFO", "NIFTY27JAN26F"),
-        ("NFO", "NIFTY JAN"),
-        ("NFO", "NIFTY 06JAN 26000 CE"),
-        ("NFO", "NIFTY06JAN2626000CE"),
-        ("NSE", "NIFTY"),
-    ]
-    
-    for exchange, search_text in examples:
-        search_symbol(api, exchange, search_text)
-        input("\nPress Enter for next search...")
     
     # Interactive mode
     print("\n" + "="*70)
@@ -85,14 +72,22 @@ def main():
     print("Enter 'quit' to exit\n")
     
     while True:
-        exchange = input("Exchange (NSE/NFO): ").strip().upper()
-        if exchange == 'QUIT':
+        print("\n" + "-"*30)
+        search_text = input("Enter symbol (e.g. 'NIFTY 24000 CE', 'RELIANCE', 'quit'): ").strip()
+        
+        if search_text.lower() in ['quit', 'exit']:
             break
             
-        search_text = input("Search text: ").strip()
-        if search_text == 'quit':
-            break
+        if not search_text:
+            continue
             
+        # Auto-detect exchange: Options/Futures are usually in NFO
+        exchange = 'NSE'
+        if any(x in search_text.upper() for x in [' CE', ' PE', 'FUT', 'NIFTY', 'BANKNIFTY']):
+             if any(c.isdigit() for c in search_text):
+                 exchange = 'NFO'
+        
+        print(f"Searching in Exchange: {exchange}")
         search_symbol(api, exchange, search_text)
 
 
