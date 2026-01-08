@@ -99,9 +99,13 @@ class Orchestrator:
         self.config.validate()
         self.config.print_config()
         
+        # Setup logging
+        self._setup_logging()
+        
         # Generate future symbol
         self.fut_symbol = get_future_symbol(self.config.FUTURE_EXPIRY)
         print(f"🎯 Target Future:  {self.fut_symbol}")
+        self._log_and_print(f"Target Future: {self.fut_symbol}")
         
         # Shared components
         self.risk_manager = RiskManager(self.config)
@@ -120,9 +124,93 @@ class Orchestrator:
         self.is_running = False
         self.iteration = 0
         self.start_time:  Optional[datetime] = None
+        self.reset_count = 0
         
         print(f"\n🤖 SYSTEM READY: {len(self.all_runners)} strategy instances")
         print("=" * 60 + "\n")
+        self._log_and_print(f"System initialized with {len(self.all_runners)} strategies")
+    
+    def _setup_logging(self):
+        """Setup logging system for live trading."""
+        import logging
+        
+        # Create logs directory if doesn't exist
+        log_dir = os.path.join(os.path.dirname(os.path.abspath(__file__)), 'logs')
+        os.makedirs(log_dir, exist_ok=True)
+        
+        # Create log file with timestamp
+        timestamp = datetime.now().strftime('%Y%m%d_%H%M%S')
+        log_file = os.path.join(log_dir, f'Live_System_Log_{timestamp}.txt')
+        
+        # Configure logging
+        logging.basicConfig(
+            level=logging.INFO,
+            format='%(asctime)s | %(levelname)s | %(message)s',
+            handlers=[
+                logging.FileHandler(log_file, encoding='utf-8'),
+                logging.StreamHandler(sys.stdout)
+            ]
+        )
+        
+        self.logger = logging.getLogger('Experiment6')
+        self.logger.info("=" * 60)
+        self.logger.info("EXPERIMENT 6 - SYSTEM LOG INITIALIZED")
+        self.logger.info("=" * 60)
+        print(f"📝 Logging to: {log_file}")
+    
+    def _log_and_print(self, message: str, level: str = 'INFO'):
+        """Logs and prints a message."""
+        if hasattr(self, 'logger'):
+            if level == 'INFO':
+                self.logger.info(message)
+            elif level == 'WARNING':
+                self.logger.warning(message)
+            elif level == 'ERROR':
+                self.logger.error(message)
+        else:
+            print(message)
+    
+    def _check_daily_loss_reset(self) -> bool:
+        """Check if max daily loss hit and should reset."""
+        if self.risk_manager.daily_stats.net_pnl < -self.risk_manager.max_daily_loss:
+            return True
+        return False
+    
+    def _reset_for_new_session(self):
+        """Reset system after max daily loss for fresh start."""
+        self.reset_count += 1
+        
+        # Log the reset
+        reset_msg = f"\n{'='*60}\n"
+        reset_msg += f"🔄 AUTO-RESET #{self.reset_count} - MAX DAILY LOSS HIT\n"
+        reset_msg += f"Previous Loss: ₹{abs(self.risk_manager.daily_stats.net_pnl):.2f}\n"
+        reset_msg += f"Trades Taken: {self.risk_manager.daily_stats.trades_taken}\n"
+        reset_msg += f"Win Rate: {self.risk_manager.daily_stats.win_rate:.1f}%\n"
+        reset_msg += f"Starting Fresh Session with Capital: ₹{self.config.Risk.CAPITAL_PER_STRATEGY:.2f}\n"
+        reset_msg += f"{'='*60}\n"
+        
+        self._log_and_print(reset_msg, 'WARNING')
+        
+        # Force exit all positions
+        self._force_exit_all(f"AUTO_RESET_{self.reset_count}")
+        
+        # Reset risk manager
+        self.risk_manager.reset_daily_stats()
+        self.risk_manager.is_halted = False
+        self.risk_manager.halt_reason = None
+        
+        # Reset signal aggregator
+        self.signal_aggregator.reset_stats()
+        
+        # Reset all runners
+        for runner in self.all_runners:
+            if hasattr(runner, 'reset_stats'):
+                runner.reset_stats()
+        
+        # Wait before resuming
+        self._log_and_print("⏳ Waiting 5 seconds before resuming...")
+        time.sleep(5)
+        self._log_and_print("✅ Fresh session started - ready to trade!")
     
     def _initialize_timeframes(self):
         """Initializes all timeframe instances."""
@@ -212,10 +300,16 @@ class Orchestrator:
                     self._force_exit_all("EOD_FORCE_EXIT")
                     break
                 
-                # 3.Update all data engines
+                # 3.Check for max daily loss and auto-reset
+                if self._check_daily_loss_reset():
+                    self._log_and_print("🔄 MAX DAILY LOSS HIT - AUTO RESET TRIGGERED")
+                    self._reset_for_new_session()
+                    continue
+                
+                # 4.Update all data engines
                 self._update_all_engines()
                 
-                # 4.Process strategies if market open
+                # 5.Process strategies if market open
                 if self._is_market_open(now):
                     # Check no-entry time
                     no_new_entries = self._is_no_entry_time(now)
@@ -224,11 +318,11 @@ class Orchestrator:
                     for tf, instance in self.timeframes.items():
                         self._process_timeframe(instance, no_new_entries)
                 
-                # 5.Periodic status update
+                # 6.Periodic status update
                 if self.iteration % 30 == 0:
                     self._print_status()
                 
-                # 6.Loop delay
+                # 7.Loop delay
                 time.sleep(1)
                 
         except KeyboardInterrupt:

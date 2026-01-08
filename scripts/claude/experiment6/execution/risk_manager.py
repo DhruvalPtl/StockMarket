@@ -310,7 +310,9 @@ class RiskManager:
         """
         # Baseline ATR (normal conditions)
         baseline_atr = 50
-        
+                # Prevent division by zero
+        if baseline_atr <= 0 or atr <= 0:
+            return size_mult
         if atr > baseline_atr * 1.5:
             # High volatility - reduce size
             reduction = min(0.5, (atr / baseline_atr - 1) * 0.3)
@@ -364,7 +366,7 @@ class RiskManager:
             Position ID
         """
         self.position_counter += 1
-        pos_id = f"POS_{self.position_counter: 04d}"
+        pos_id = f"POS_{self.position_counter:04d}"
         
         position = Position(
             position_id=pos_id,
@@ -486,6 +488,14 @@ class RiskManager:
             'max_drawdown': self.daily_stats.max_drawdown,
             'is_halted': self.is_halted
         }
+    
+    def reset_daily_stats(self):
+        """Reset daily statistics for fresh trading session."""
+        self.daily_stats = DailyStats(date=date.today())
+        self.last_reset_date = date.today()
+        self.positions.clear()
+        self.active_strikes.clear()
+        self.position_counter = 0
 
 
 # ============================================================

@@ -24,7 +24,7 @@ from dataclasses import dataclass
 try:
     from growwapi import GrowwAPI
 except ImportError:
-    print("⚠️ WARNING: 'growwapi' not found.Using mock mode.")
+    print("❌ CRITICAL: 'growwapi' not found. Install it: pip install growwapi")
     GrowwAPI = None
 
 # Add parent to path
@@ -174,7 +174,7 @@ class DataEngine:
     def _connect(self):
         """Authenticates with the Groww API."""
         if GrowwAPI is None:
-            print(f"[{self.timeframe}] ⚠️ Running in MOCK mode (no API)")
+            print(f"[{self.timeframe}] ❌ GrowwAPI module not found - install 'growwapi' package")
             return
         
         try: 
@@ -338,7 +338,8 @@ class DataEngine:
                 data = self.strikes_data[strike]
                 price = data.ce_ltp if option_type == 'CE' else data.pe_ltp
                 
-                if price > 0.1:  # Valid price
+                # Valid price must be at least ₹1
+                if price >= 1.0:
                     cost = price * lot_size
                     if cost <= max_cost:
                         return data
@@ -367,7 +368,7 @@ class DataEngine:
     def _fetch_spot_data(self):
         """Fetches spot index candles."""
         if not self.is_connected:
-            self._generate_mock_spot_data()
+            print(f"⚠️ [{self.timeframe}] Not connected to API - cannot fetch spot data")
             return
         
         try:
@@ -381,11 +382,27 @@ class DataEngine:
                 self.timeframe
             )
             
-            if not resp or 'candles' not in resp or len(resp['candles']) == 0:
+            if not resp:
+                print(f"⚠️ [{self.timeframe}] Spot API returned None")
+                return
+            
+            if 'candles' not in resp:
+                print(f"⚠️ [{self.timeframe}] Spot API response missing 'candles' key: {resp}")
+                return
+            
+            if len(resp['candles']) == 0:
+                print(f"⚠️ [{self.timeframe}] Spot API returned empty candles")
                 return
             
             df = pd.DataFrame(resp['candles'])
-            df.columns = ['t', 'o', 'h', 'l', 'c', 'v'][: len(df.columns)]
+            # Handle variable column counts from API
+            expected_cols = ['t', 'o', 'h', 'l', 'c', 'v']
+            if len(df.columns) <= len(expected_cols):
+                df.columns = expected_cols[:len(df.columns)]
+            else:
+                # API returned extra columns, use first 6
+                df = df.iloc[:, :6]
+                df.columns = expected_cols
             
             # Update LTP
             self.spot_ltp = float(df['c'].iloc[-1])
@@ -398,7 +415,7 @@ class DataEngine:
                     high=float(row['h']),
                     low=float(row['l']),
                     close=float(row['c']),
-                    volume=float(row.get('v', 0))
+                    volume=float(row['v']) if pd.notna(row.get('v')) else 0.0
                 )
                 self.candles.append(candle)
             
@@ -406,31 +423,48 @@ class DataEngine:
             self._calculate_indicators(df)
             
         except Exception as e:
-            if self.update_count % 10 == 0:
-                print(f"⚠️ Spot fetch error: {e}")
+            print(f"❌ [{self.timeframe}] Spot fetch error: {e}")
+            import traceback
+            traceback.print_exc()
     
     def _fetch_future_data(self):
         """Fetches futures candles."""
         if not self.is_connected:
-            self._generate_mock_future_data()
+            print(f"⚠️ [{self.timeframe}] Not connected to API - cannot fetch future data")
             return
         
-        try: 
-            today_open = datetime.now().replace(hour=9, minute=15, second=0, microsecond=0)
-            now = datetime.now()
+        try:# Use last 5 days for historical data
+            start_dt = datetime.now() - timedelta(days=5)
+            end_dt = datetime.now()
             
             resp = self.groww.get_historical_candles(
                 "NSE", "FNO", self.fut_symbol,
-                today_open.strftime("%Y-%m-%d %H:%M:%S"),
-                now.strftime("%Y-%m-%d %H:%M:%S"),
+                start_dt.strftime("%Y-%m-%d %H:%M:%S"),
+                end_dt.strftime("%Y-%m-%d %H:%M:%S"),
                 self.timeframe
             )
             
-            if not resp or 'candles' not in resp or len(resp['candles']) == 0:
+            if not resp:
+                print(f"⚠️ [{self.timeframe}] Future API returned None for {self.fut_symbol}")
+                return
+            
+            if 'candles' not in resp:
+                print(f"⚠️ [{self.timeframe}] Future API response missing 'candles' key: {resp}")
+                return
+            
+            if len(resp['candles']) == 0:
+                print(f"⚠️ [{self.timeframe}] Future API returned empty candles for {self.fut_symbol}")
                 return
             
             df = pd.DataFrame(resp['candles'])
-            df.columns = ['t', 'o', 'h', 'l', 'c', 'v'][: len(df.columns)]
+            # Handle variable column counts from API
+            expected_cols = ['t', 'o', 'h', 'l', 'c', 'v']
+            if len(df.columns) <= len(expected_cols):
+                df.columns = expected_cols[:len(df.columns)]
+            else:
+                # API returned extra columns, use first 6
+                df = df.iloc[:, :6]
+                df.columns = expected_cols
             
             last_row = df.iloc[-1]
             self.fut_ltp = float(last_row['c'])
@@ -456,13 +490,16 @@ class DataEngine:
             self._calculate_vwap(df)
             
         except Exception as e:
+            print(f"❌ [{self.timeframe}] Future fetch error: {e}")
+            import traceback
+            traceback.print_exc()
             if self.update_count % 10 == 0:
                 print(f"⚠️ Future fetch error: {e}")
     
     def _fetch_option_chain(self):
         """Fetches option chain data."""
         if not self.is_connected:
-            self._generate_mock_option_chain()
+            print(f"⚠️ [{self.timeframe}] Not connected to API - cannot fetch option chain")
             return
         
         try:
@@ -651,75 +688,9 @@ class DataEngine:
             if self.opening_range_high > 0:
                 self.opening_range_set = True
     
-    # ==================== MOCK DATA (for testing) ====================
-    
-    def _generate_mock_spot_data(self):
-        """Generates mock spot data for testing."""
-        import random
-        
-        base = 24000 + random.randint(-100, 100)
-        self.spot_ltp = base + random.uniform(-10, 10)
-        
-        # Mock indicators
-        self.ema_5 = base + random.uniform(-5, 5)
-        self.ema_13 = base + random.uniform(-10, 10)
-        self.ema_21 = base + random.uniform(-15, 15)
-        self.ema_50 = base + random.uniform(-30, 30)
-        self.rsi = 50 + random.uniform(-20, 20)
-        self.adx = 20 + random.uniform(0, 20)
-        self.atr = 40 + random.uniform(0, 20)
-    
-    def _generate_mock_future_data(self):
-        """Generates mock future data."""
-        import random
-        
-        self.fut_open = self.spot_ltp + random.uniform(-5, 5)
-        self.fut_high = self.fut_open + random.uniform(10, 30)
-        self.fut_low = self.fut_open - random.uniform(10, 30)
-        self.fut_close = self.fut_open + random.uniform(-20, 20)
-        self.fut_ltp = self.fut_close
-        
-        self.candle_body = abs(self.fut_close - self.fut_open)
-        self.candle_range = self.fut_high - self.fut_low
-        self.is_green_candle = self.fut_close > self.fut_open
-        
-        self.vwap = (self.fut_high + self.fut_low + self.fut_close) / 3
-        
-        self.current_volume = 50000 + random.randint(0, 50000)
-        self.volume_relative = 0.8 + random.uniform(0, 1.5)
-    
-    def _generate_mock_option_chain(self):
-        """Generates mock option chain."""
-        import random
-        
-        self.atm_strike = round(self.spot_ltp / 50) * 50
-        
-        for offset in [-150, -100, -50, 0, 50, 100, 150]: 
-            strike = self.atm_strike + offset
-            
-            self.strikes_data[strike] = StrikeOIData(
-                strike=strike,
-                ce_oi=random.randint(100000, 500000),
-                pe_oi=random.randint(100000, 500000),
-                ce_oi_change=random.randint(-10000, 10000),
-                pe_oi_change=random.randint(-10000, 10000),
-                ce_ltp=max(5, 100 - offset * 0.5 + random.uniform(-10, 10)),
-                pe_ltp=max(5, 100 + offset * 0.5 + random.uniform(-10, 10)),
-                ce_iv=15 + random.uniform(-3, 3),
-                pe_iv=15 + random.uniform(-3, 3),
-                ce_delta=0.5 - offset * 0.005,
-                pe_delta=-0.5 - offset * 0.005
-            )
-        
-        self.total_ce_oi = sum(s.ce_oi for s in self.strikes_data.values())
-        self.total_pe_oi = sum(s.pe_oi for s in self.strikes_data.values())
-        self.pcr = self.total_pe_oi / self.total_ce_oi if self.total_ce_oi > 0 else 1.0
-        
-        if self.atm_strike in self.strikes_data:
-            atm = self.strikes_data[self.atm_strike]
-            self.atm_ce_ltp = atm.ce_ltp
-            self.atm_pe_ltp = atm.pe_ltp
-            self.atm_iv = (atm.ce_iv + atm.pe_iv) / 2
+    # ==================== MOCK DATA REMOVED ====================
+    # All mock data functionality has been removed.
+    # System now uses ONLY real API data.
     
     # ==================== UTILITIES ====================
     

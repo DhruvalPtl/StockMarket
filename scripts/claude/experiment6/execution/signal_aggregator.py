@@ -362,6 +362,13 @@ class SignalAggregator:
             'execution_rate': (self.signals_executed / total * 100) if total > 0 else 0
         }
     
+    def reset_stats(self):
+        """Reset aggregation statistics."""
+        self.signals_processed = 0
+        self.signals_executed = 0
+        self.signals_skipped = 0
+        self.signal_history.clear()
+    
     def print_decision(self, agg_signal: AggregatedSignal):
         """Prints a formatted decision summary."""
         if agg_signal.decision == TradeDecision.EXECUTE: 

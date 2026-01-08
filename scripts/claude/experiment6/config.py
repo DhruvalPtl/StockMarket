@@ -18,8 +18,8 @@ class BotConfig:
     # ============================================================
     # 1.API CREDENTIALS & CONNECTION
     # ============================================================
-    API_KEY = "eyJraWQiOiJaTUtjVXciLCJhbGciOiJFUzI1NiJ9.eyJleHAiOjI1NTYyNTI4NzUsImlhdCI6MTc2Nzg1Mjg3NSwibmJmIjoxNzY3ODUyODc1LCJzdWIiOiJ7XCJ0b2tlblJlZklkXCI6XCI2N2U2MGI0Yy0wZjRjLTQ3YTItYWYzZi02ZTJhMzRkN2RiZWNcIixcInZlbmRvckludGVncmF0aW9uS2V5XCI6XCJlMzFmZjIzYjA4NmI0MDZjODg3NGIyZjZkODQ5NTMxM1wiLFwidXNlckFjY291bnRJZFwiOlwiMDdmMDA0MGMtZTk4Zi00ZDNmLTk5Y2EtZDc1ZjBlYWU5M2NlXCIsXCJkZXZpY2VJZFwiOlwiYWM2YTBhMDUtMjg5MS01ZjgyLWI5ZjgtOTEyODViOGZlZmZiXCIsXCJzZXNzaW9uSWRcIjpcImViMjEzMGVkLWE4YzktNDQ3My05M2M5LTllNjViZGFiZWJkMFwiLFwiYWRkaXRpb25hbERhdGFcIjpcIno1NC9NZzltdjE2WXdmb0gvS0EwYk1yOE5XVzhzdTNvZ080am1ZUzIwZEpSTkczdTlLa2pWZDNoWjU1ZStNZERhWXBOVi9UOUxIRmtQejFFQisybTdRPT1cIixcInJvbGVcIjpcImF1dGgtdG90cFwiLFwic291cmNlSXBBZGRyZXNzXCI6XCIyNDA5OjQwYzE6MWU6ZjZmOmU4MWU6NzEzZTplNTQwOmIxZjYsMTcyLjcwLjE5Mi4xODEsMzUuMjQxLjIzLjEyM1wiLFwidHdvRmFFeHBpcnlUc1wiOjI1NTYyNTI4NzU5NjF9IiwiaXNzIjoiYXBleC1hdXRoLXByb2QtYXBwIn0.Hfu_-59FrzFLxVlkWzZDvRCOeuESpYNMkfCTneqdFMFsXLWIXBx9NIPkBTLeesRys8VpgSl7NOxGa4J2JIR4iw"
-    API_SECRET = "JLs8dG45z-E8N@W$3)9iH!U0w&z@uoW)"
+    API_KEY = "eyJraWQiOiJaTUtjVXciLCJhbGciOiJFUzI1NiJ9.eyJleHAiOjI1NTYyNjk3NzYsImlhdCI6MTc2Nzg2OTc3NiwibmJmIjoxNzY3ODY5Nzc2LCJzdWIiOiJ7XCJ0b2tlblJlZklkXCI6XCIzNzZlODIyMS1hYjliLTQxZjItYjdkMi1iNWI1ODNiMGRkYjJcIixcInZlbmRvckludGVncmF0aW9uS2V5XCI6XCJlMzFmZjIzYjA4NmI0MDZjODg3NGIyZjZkODQ5NTMxM1wiLFwidXNlckFjY291bnRJZFwiOlwiMDdmMDA0MGMtZTk4Zi00ZDNmLTk5Y2EtZDc1ZjBlYWU5M2NlXCIsXCJkZXZpY2VJZFwiOlwiYWM2YTBhMDUtMjg5MS01ZjgyLWI5ZjgtOTEyODViOGZlZmZiXCIsXCJzZXNzaW9uSWRcIjpcIjUzYjcxMzgwLTk2ZjAtNDQ1Zi05ODYxLTcyNDk3YmQ3NDRmY1wiLFwiYWRkaXRpb25hbERhdGFcIjpcIno1NC9NZzltdjE2WXdmb0gvS0EwYk1yOE5XVzhzdTNvZ080am1ZUzIwZEpSTkczdTlLa2pWZDNoWjU1ZStNZERhWXBOVi9UOUxIRmtQejFFQisybTdRPT1cIixcInJvbGVcIjpcImF1dGgtdG90cFwiLFwic291cmNlSXBBZGRyZXNzXCI6XCIxNC4xMzkuMTIyLjEzOSwxNzIuNjkuMjAzLjEyNywzNS4yNDEuMjMuMTIzXCIsXCJ0d29GYUV4cGlyeVRzXCI6MjU1NjI2OTc3NjIzOX0iLCJpc3MiOiJhcGV4LWF1dGgtcHJvZC1hcHAifQ.uz-YT6LIILbNJKdjZ6_Dn-sE5tq3WN1IVXAsqiOdqNOiVnggVFstG9lFIJ9Mhsuj4g7dgAfddXZgyV36pu42oQ"
+    API_SECRET = "C^3iMq-HrN3M5GkkEP3xaV^$gysVcbhb"
     
     # Rate Limiting (Seconds between calls)
     RATE_LIMIT_SPOT = 0.5
@@ -58,14 +58,14 @@ class BotConfig:
     # ============================================================
     class Regime:
         # ADX thresholds for trend detection
-        ADX_TRENDING_THRESHOLD = 25      # Above = trending
-        ADX_STRONG_TREND_THRESHOLD = 40  # Above = strong trend
+        ADX_TRENDING_THRESHOLD = 20      # Above = trending
+        ADX_STRONG_TREND_THRESHOLD = 35  # Above = strong trend
         ADX_RANGING_THRESHOLD = 20       # Below = ranging
         
         # ATR thresholds for volatility
         ATR_PERIOD = 14
-        ATR_VOLATILE_MULTIPLIER = 1.5    # ATR > 1.5x avg = volatile
-        ATR_LOW_VOL_MULTIPLIER = 0.7     # ATR < 0.7x avg = low vol
+        ATR_VOLATILE_MULTIPLIER = 1.3    # ATR > 1.5x avg = volatile
+        ATR_LOW_VOL_MULTIPLIER = 0.8     # ATR < 0.7x avg = low vol
         
         # Regime confirmation candles
         REGIME_CONFIRMATION_CANDLES = 3
@@ -84,8 +84,8 @@ class BotConfig:
         EMA_PERIODS = [5, 13, 21, 50]    # Multi-EMA check
         
         # PCR Thresholds
-        PCR_BULLISH = 1.2                # High put writing = bullish
-        PCR_BEARISH = 0.8                # High call writing = bearish
+        PCR_BULLISH = 1.15                # High put writing = bullish
+        PCR_BEARISH = 0.85                # High call writing = bearish
         
     # ============================================================
     # 6.ORDER FLOW SETTINGS (NEW)
@@ -121,7 +121,7 @@ class BotConfig:
     # ============================================================
     class Confluence:
         # Minimum score to take trade
-        MIN_SCORE_HIGH_CONFIDENCE = 5
+        MIN_SCORE_HIGH_CONFIDENCE = 4
         MIN_SCORE_MEDIUM_CONFIDENCE = 3
         MIN_SCORE_LOW_CONFIDENCE = 2     # Maybe skip or reduce size
         
@@ -146,13 +146,13 @@ class BotConfig:
         LOT_SIZE = 75                    # Updated Nifty lot size
         
         # Position Limits (NEW)
-        MAX_CONCURRENT_POSITIONS = 4     # Across ALL strategies
-        MAX_SAME_DIRECTION = 3           # Max 3 CE or 3 PE at same time
-        MAX_SAME_STRIKE = 1              # Only 1 position per strike
+        MAX_CONCURRENT_POSITIONS = 100     # Across ALL strategies
+        MAX_SAME_DIRECTION = 100           # Max 3 CE or 3 PE at same time
+        MAX_SAME_STRIKE = 100              # Only 1 position per strike
         
         # Daily Limits
-        MAX_DAILY_TRADES = 20            # Circuit breaker
-        MAX_DAILY_LOSS = 5000            # Stop trading if hit (optional)
+        MAX_DAILY_TRADES = 1000            # Circuit breaker
+        MAX_DAILY_LOSS = 1000            # Stop trading if hit (optional)
         MAX_DAILY_LOSS_ACTION = "LOG"    # "HALT" or "LOG"
         
         # Costs
@@ -255,8 +255,8 @@ class BotConfig:
     # 14.PATTERN SETTINGS
     # ============================================================
     class Patterns:
-        MIN_CANDLE_BODY = 10             # Points
-        ENGULFING_RATIO = 1.5            # Body 1.5x previous
+        MIN_CANDLE_BODY = 8             # Points
+        ENGULFING_RATIO = 1.2            # Body 1.5x previous
         DOJI_BODY_PCT = 0.1              # Body < 10% of range
         
     # ============================================================

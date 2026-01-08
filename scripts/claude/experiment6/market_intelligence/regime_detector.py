@@ -136,6 +136,10 @@ class RegimeDetector:
         atr = self._calculate_atr()
         atr_percentile = self._calculate_atr_percentile(atr)
         
+        # regime_detector.py (after Line 140)
+        if self.candle_count % 50 == 0:
+            print(f"[Regime] ATR={atr:.1f} ({atr_percentile:.0f}th percentile)")
+    
         # Store ATR for history
         self.atr_history.append(atr)
         
