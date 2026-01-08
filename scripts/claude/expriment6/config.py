@@ -58,14 +58,14 @@ class BotConfig:
     # ============================================================
     class Regime:
         # ADX thresholds for trend detection
-        ADX_TRENDING_THRESHOLD = 20      # Above = trending
-        ADX_STRONG_TREND_THRESHOLD = 35  # Above = strong trend
+        ADX_TRENDING_THRESHOLD = 25      # Above = trending
+        ADX_STRONG_TREND_THRESHOLD = 40  # Above = strong trend
         ADX_RANGING_THRESHOLD = 20       # Below = ranging
         
         # ATR thresholds for volatility
         ATR_PERIOD = 14
-        ATR_VOLATILE_MULTIPLIER = 1.3    # ATR > 1.5x avg = volatile
-        ATR_LOW_VOL_MULTIPLIER = 0.8     # ATR < 0.7x avg = low vol
+        ATR_VOLATILE_MULTIPLIER = 1.5    # ATR > 1.5x avg = volatile
+        ATR_LOW_VOL_MULTIPLIER = 0.7     # ATR < 0.7x avg = low vol
         
         # Regime confirmation candles
         REGIME_CONFIRMATION_CANDLES = 3
@@ -75,25 +75,25 @@ class BotConfig:
     # ============================================================
     class Bias: 
         # Futures Premium
-        PREMIUM_STRONG_BULLISH = 175      # Points above spot
-        PREMIUM_BULLISH = 155
-        PREMIUM_NEUTRAL_LOW = 120
-        PREMIUM_BEARISH = 80            # Discount
+        PREMIUM_STRONG_BULLISH = 80      # Points above spot
+        PREMIUM_BULLISH = 50
+        PREMIUM_NEUTRAL_LOW = 20
+        PREMIUM_BEARISH = -20            # Discount
         
         # EMA Alignment
         EMA_PERIODS = [5, 13, 21, 50]    # Multi-EMA check
         
         # PCR Thresholds
-        PCR_BULLISH = 1.15                # High put writing = bullish
-        PCR_BEARISH = 0.85                # High call writing = bearish
+        PCR_BULLISH = 1.2                # High put writing = bullish
+        PCR_BEARISH = 0.8                # High call writing = bearish
         
     # ============================================================
     # 6.ORDER FLOW SETTINGS (NEW)
     # ============================================================
     class OrderFlow: 
         # OI Change thresholds
-        OI_SIGNIFICANT_CHANGE_PCT = 0.5    # 5% change = significant
-        OI_BUILDUP_THRESHOLD = 2        # 10% increase = buildup
+        OI_SIGNIFICANT_CHANGE_PCT = 5    # 5% change = significant
+        OI_BUILDUP_THRESHOLD = 10        # 10% increase = buildup
         
         # Volume thresholds
         VOLUME_SPIKE_MULTIPLIER = 2.0    # 2x avg = spike
@@ -121,7 +121,7 @@ class BotConfig:
     # ============================================================
     class Confluence:
         # Minimum score to take trade
-        MIN_SCORE_HIGH_CONFIDENCE = 4
+        MIN_SCORE_HIGH_CONFIDENCE = 5
         MIN_SCORE_MEDIUM_CONFIDENCE = 3
         MIN_SCORE_LOW_CONFIDENCE = 2     # Maybe skip or reduce size
         
@@ -146,12 +146,12 @@ class BotConfig:
         LOT_SIZE = 75                    # Updated Nifty lot size
         
         # Position Limits (NEW)
-        MAX_CONCURRENT_POSITIONS = 100     # Across ALL strategies
-        MAX_SAME_DIRECTION = 100           # Max 3 CE or 3 PE at same time
-        MAX_SAME_STRIKE = 100              # Only 1 position per strike
+        MAX_CONCURRENT_POSITIONS = 4     # Across ALL strategies
+        MAX_SAME_DIRECTION = 3           # Max 3 CE or 3 PE at same time
+        MAX_SAME_STRIKE = 1              # Only 1 position per strike
         
         # Daily Limits
-        MAX_DAILY_TRADES = 1000            # Circuit breaker
+        MAX_DAILY_TRADES = 20            # Circuit breaker
         MAX_DAILY_LOSS = 5000            # Stop trading if hit (optional)
         MAX_DAILY_LOSS_ACTION = "LOG"    # "HALT" or "LOG"
         
@@ -255,8 +255,8 @@ class BotConfig:
     # 14.PATTERN SETTINGS
     # ============================================================
     class Patterns:
-        MIN_CANDLE_BODY = 8             # Points
-        ENGULFING_RATIO = 1.2            # Body 1.5x previous
+        MIN_CANDLE_BODY = 10             # Points
+        ENGULFING_RATIO = 1.5            # Body 1.5x previous
         DOJI_BODY_PCT = 0.1              # Body < 10% of range
         
     # ============================================================
@@ -265,7 +265,7 @@ class BotConfig:
     DEBUG_MODE = False
     VERBOSE_LOGGING = True
     
-    BASE_LOG_PATH = r"D:\\StockMarket\\StockMarket\\scripts\\claude\\expriment6\\log"
+    BASE_LOG_PATH = r"D:\\StockMarket\\StockMarket\\scripts\\claude\\experiment6\\log"
     
     @classmethod
     def get_log_paths(cls) -> Dict[str, str]: 

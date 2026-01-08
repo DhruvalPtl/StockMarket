@@ -98,11 +98,6 @@ class DataEngine:
         self.fut_low: float = 0.0
         self.fut_close: float = 0.0
         
-        # Gap Tracking (NEW)
-        self.yesterday_close: float = 0.0
-        self.today_open: float = 0.0
-        self.gap_points: float = 0.0
-        
         # Indicators
         self.rsi: float = 50.0
         self.ema_5: float = 0.0
@@ -145,7 +140,7 @@ class DataEngine:
         self.is_connected: bool = False
         
         # Candle history
-        self.candles: deque[CandleData] = deque(maxlen=300)
+        self.candles: deque[CandleData] = deque(maxlen=200)
         
         # OI history for change calculation
         self.prev_ce_oi: Dict[int, int] = {}
@@ -179,9 +174,8 @@ class DataEngine:
     def _connect(self):
         """Authenticates with the Groww API."""
         if GrowwAPI is None:
-            print(f"[{self.timeframe}] ❌ CRITICAL: growwapi package not installed")
-            print(f"[{self.timeframe}] Install with: pip install growwapi")
-            sys.exit(1)
+            print(f"[{self.timeframe}] ⚠️ Running in MOCK mode (no API)")
+            return
         
         try: 
             print(f"[{self.timeframe}] 🔑 Authenticating...")
@@ -191,8 +185,7 @@ class DataEngine:
             print(f"[{self.timeframe}] ✅ Connected to Groww API")
         except Exception as e:
             print(f"[{self.timeframe}] ❌ Connection Failed: {e}")
-            print(f"[{self.timeframe}] 🛑 STOPPING - Fix your API credentials in config.py")
-            sys.exit(1)  # ✅ EXIT IMMEDIATELY - NO MOCK MODE
+            self.is_connected = False
     
     def _init_logging(self):
         """Sets up CSV logging."""
@@ -255,7 +248,7 @@ class DataEngine:
             return True
             
         except Exception as e:
-            if self.update_count == 1 or self.update_count % 10 == 0:
+            if self.update_count % 10 == 0:
                 print(f"⚠️ [{self.timeframe}] Update error: {e}")
             return False
     
@@ -353,206 +346,111 @@ class DataEngine:
     # ==================== INTERNAL FETCHERS ====================
     
     def _fetch_spot_data(self):
-        """Fetches spot data handling Weekends, Duplicates, and Indicators."""
+        """Fetches spot index candles."""
         if not self.is_connected:
+            self._generate_mock_spot_data()
             return
-
-        max_retries = 3
-        retry_delay = 2  # seconds
         
-        for attempt in range(max_retries):
-            try:
-                # 1. SMART TIME WINDOW
-                start_dt = datetime.now() - timedelta(days=5)
-                end_dt = datetime.now()
-
-                resp = self.groww.get_historical_candles(
-                    "NSE", "CASH", "NSE-NIFTY",
-                    start_dt.strftime("%Y-%m-%d %H:%M:%S"),
-                    end_dt.strftime("%Y-%m-%d %H:%M:%S"),
-                    self.timeframe
-                )
-
-                # Fallback to Live Quote
-                if not resp or 'candles' not in resp or len(resp['candles']) == 0:
-                    try:
-                        quote = self.groww.get_quote("NIFTY", "NSE", "CASH")
-                        self.spot_ltp = float(quote['last_price'])
-                    except: 
-                        pass
-                    return
-
-            df = pd.DataFrame(resp['candles'])
-            cols = ['t', 'o', 'h', 'l', 'c', 'v']
-            if len(df.columns) > len(cols):
-                df = df.iloc[:, :len(cols)]
-            df.columns = cols[:len(df.columns)]
-            df['t'] = pd.to_datetime(df['t'])
-
-            # 2. DEDUPLICATION
-            last_stored_time = self.candles[-1].timestamp if self.candles else datetime.min
-            new_candles_added = False
+        try:
+            start_dt = datetime.now() - timedelta(days=5)
+            end_dt = datetime.now()
             
-            for _, row in df.iterrows():
-                candle_ts = row['t']
-                if candle_ts > last_stored_time:
-                    # ✅ FIXED: Applied pd.notna check inside the loop too
-                    candle = CandleData(
-                        timestamp=candle_ts,
-                        open=float(row['o']) if pd.notna(row['o']) else 0.0,
-                        high=float(row['h']) if pd.notna(row['h']) else 0.0,
-                        low=float(row['l']) if pd.notna(row['l']) else 0.0,
-                        close=float(row['c']) if pd.notna(row['c']) else 0.0,
-                        volume=float(row.get('v')) if pd.notna(row.get('v')) else 0.0
-                    )
-                    self.candles.append(candle)
-                    new_candles_added = True
-
-            # Update LTP (Safe Version)
-            last_close = df['c'].iloc[-1]
-            self.spot_ltp = float(last_close) if pd.notna(last_close) else 0.0
-
-            # 3. CALCULATE INDICATORS
-            if new_candles_added or not self.warmup_complete:
-                full_df = pd.DataFrame([
-                    {'c': c.close, 'h': c.high, 'l': c.low, 'v': c.volume} 
-                    for c in self.candles
-                ])
-                if len(full_df) > 0:
-                    self._calculate_indicators(full_df)
-                
-                # Success - break retry loop
-                break
-                
-            except Exception as e:
-                if attempt < max_retries - 1:
-                    # Retry on error
-                    time.sleep(retry_delay)
-                    continue
-                else:
-                    # Final attempt failed
-                    error_msg = str(e)
-                    if "Internal error occurred" in error_msg:
-                        print(f"⚠️ [{self.timeframe}] Groww API internal error - will retry next cycle")
-                    else:
-                        print(f"❌ [{self.timeframe}] Spot fetch error: {error_msg}")
-                    # Try fallback to quote
-                    try:
-                        quote = self.groww.get_quote("NIFTY", "NSE", "CASH")
-                        self.spot_ltp = float(quote['last_price'])
-                    except:
-                        pass
+            resp = self.groww.get_historical_candles(
+                "NSE", "CASH", "NSE-NIFTY",
+                start_dt.strftime("%Y-%m-%d %H:%M:%S"),
+                end_dt.strftime("%Y-%m-%d %H:%M:%S"),
+                self.timeframe
+            )
+            
+            if not resp or 'candles' not in resp or len(resp['candles']) == 0:
+                return
+            
+            df = pd.DataFrame(resp['candles'])
+            df.columns = ['t', 'o', 'h', 'l', 'c', 'v'][: len(df.columns)]
+            
+            # Update LTP
+            self.spot_ltp = float(df['c'].iloc[-1])
+            
+            # Store candles
+            for _, row in df.tail(50).iterrows():
+                candle = CandleData(
+                    timestamp=pd.to_datetime(row['t']),
+                    open=float(row['o']),
+                    high=float(row['h']),
+                    low=float(row['l']),
+                    close=float(row['c']),
+                    volume=float(row.get('v', 0))
+                )
+                self.candles.append(candle)
+            
+            # Calculate indicators
+            self._calculate_indicators(df)
+            
+        except Exception as e:
+            if self.update_count % 10 == 0:
+                print(f"⚠️ Spot fetch error: {e}")
     
     def _fetch_future_data(self):
-        """Fetches future data with Gap Detection and Intraday VWAP."""
+        """Fetches futures candles."""
         if not self.is_connected:
+            self._generate_mock_future_data()
             return
-
-        max_retries = 3
-        retry_delay = 2  # seconds
         
-        for attempt in range(max_retries):
-            try:
-                # 1. SMART TIME WINDOW
-                start_dt = datetime.now() - timedelta(days=5)
-                end_dt = datetime.now()
-
-                resp = self.groww.get_historical_candles(
-                    "NSE", "FNO", self.fut_symbol,
-                    start_dt.strftime("%Y-%m-%d %H:%M:%S"),
-                    end_dt.strftime("%Y-%m-%d %H:%M:%S"),
-                    self.timeframe
-                )
-
-                if not resp or 'candles' not in resp or len(resp['candles']) == 0:
-                    return
-
-            df = pd.DataFrame(resp['candles'])
-            cols = ['t', 'o', 'h', 'l', 'c', 'v']
-            if len(df.columns) > len(cols):
-                df = df.iloc[:, :len(cols)]
-            df.columns = cols[:len(df.columns)]
-            df['t'] = pd.to_datetime(df['t'])
-
-            # 2. UPDATE CURRENT PRICE (Always latest)
-            last_row = df.iloc[-1]
+        try: 
+            today_open = datetime.now().replace(hour=9, minute=15, second=0, microsecond=0)
+            now = datetime.now()
             
-            # ✅ ROBUST FIX: All price fields protected
-            self.fut_ltp = float(last_row['c']) if pd.notna(last_row['c']) else 0.0
-            self.fut_open = float(last_row['o']) if pd.notna(last_row['o']) else 0.0
-            self.fut_high = float(last_row['h']) if pd.notna(last_row['h']) else 0.0
-            self.fut_low = float(last_row['l']) if pd.notna(last_row['l']) else 0.0
-            self.fut_close = float(last_row['c']) if pd.notna(last_row['c']) else 0.0
-
-            self.candle_body = abs(self.fut_close - self.fut_open)
-            self.candle_range = self.fut_high - self.fut_low
-            self.is_green_candle = self.fut_close > self.fut_open
-
-            # Volume (Safe Version)
+            resp = self.groww.get_historical_candles(
+                "NSE", "FNO", self.fut_symbol,
+                today_open.strftime("%Y-%m-%d %H:%M:%S"),
+                now.strftime("%Y-%m-%d %H:%M:%S"),
+                self.timeframe
+            )
+            
+            if not resp or 'candles' not in resp or len(resp['candles']) == 0:
+                return
+            
+            df = pd.DataFrame(resp['candles'])
+            df.columns = ['t', 'o', 'h', 'l', 'c', 'v'][: len(df.columns)]
+            
+            last_row = df.iloc[-1]
+            self.fut_ltp = float(last_row['c'])
+            self.fut_open = float(last_row['o'])
+            self.fut_high = float(last_row['h'])
+            self.fut_low = float(last_row['l'])
+            self.fut_close = float(last_row['c'])
+            
+            # Volume
             if 'v' in df.columns:
-                vol = last_row['v']
-                self.current_volume = float(vol) if pd.notna(vol) else 0.0
-                
+                self.current_volume = float(last_row['v'])
                 self.volume_history.append(self.current_volume)
                 if len(self.volume_history) > 5:
                     self.avg_volume = sum(list(self.volume_history)[:-1]) / (len(self.volume_history) - 1)
                     self.volume_relative = self.current_volume / self.avg_volume if self.avg_volume > 0 else 1.0
-
-            # 3. GAP DETECTION
-            today_date = datetime.now().date()
-            today_df = df[df['t'].dt.date == today_date].copy()
             
-            if len(today_df) > 0 and self.today_open == 0:
-                val_open = today_df.iloc[0]['o']
-                self.today_open = float(val_open) if pd.notna(val_open) else 0.0
-                
-                yesterday_df = df[df['t'].dt.date < today_date]
-                if len(yesterday_df) > 0:
-                    val_close = yesterday_df.iloc[-1]['c']
-                    self.yesterday_close = float(val_close) if pd.notna(val_close) else 0.0
-                    self.gap_points = self.today_open - self.yesterday_close
-                    
-                    if abs(self.gap_points) > 50:
-                        print(f"📊 [{self.timeframe}] GAP DETECTED: {self.gap_points:+.2f} points")
-
-            # 4. VWAP LOGIC
-            if len(today_df) > 0:
-                self._calculate_vwap(today_df)
-            else:
-                self.vwap = self.fut_close
+            # Candle pattern
+            self.candle_body = abs(self.fut_close - self.fut_open)
+            self.candle_range = self.fut_high - self.fut_low
+            self.is_green_candle = self.fut_close > self.fut_open
             
-            # Success - break retry loop
-            break
+            # VWAP
+            self._calculate_vwap(df)
             
         except Exception as e:
-            if attempt < max_retries - 1:
-                # Retry on error
-                time.sleep(retry_delay)
-                continue
-            else:
-                # Final attempt failed
-                error_msg = str(e)
-                if "Internal error occurred" in error_msg:
-                    print(f"⚠️ [{self.timeframe}] Groww API internal error - will retry next cycle")
-                else:
-                    print(f"❌ [{self.timeframe}] Future fetch error: {error_msg}")
+            if self.update_count % 10 == 0:
+                print(f"⚠️ Future fetch error: {e}")
     
     def _fetch_option_chain(self):
         """Fetches option chain data."""
-        if not self. is_connected:
-            print(f"❌ [{self. timeframe}] No API connection")
-            raise Exception("No API connection")
+        if not self.is_connected:
+            self._generate_mock_option_chain()
+            return
         
-        max_retries = 3
-        retry_delay = 2  # seconds
-        
-        for attempt in range(max_retries):
-            try:
-                chain = self.groww.get_option_chain("NSE", "NIFTY", self.option_expiry)
-                
-                if not chain or 'strikes' not in chain:
-                    print(f"⚠️ [{self.timeframe}] No option chain data received") 
-                    return
+        try:
+            chain = self.groww.get_option_chain("NSE", "NIFTY", self.option_expiry)
+            
+            if not chain or 'strikes' not in chain: 
+                return
             
             # Strikes to fetch
             strikes_to_fetch = {
@@ -622,22 +520,9 @@ class DataEngine:
                 if self.atm_iv > 0:
                     self.iv_history.append(self.atm_iv)
             
-            # Success - break retry loop
-            break
-            
-        except Exception as e:
-            if attempt < max_retries - 1:
-                # Retry on error
-                time.sleep(retry_delay)
-                continue
-            else:
-                # Final attempt failed
-                error_msg = str(e)
-                if "Internal error occurred" in error_msg:
-                    print(f"⚠️ [{self.timeframe}] Groww API internal error (option chain) - will retry next cycle")
-                else:
-                    print(f"❌ [{self.timeframe}] CRITICAL ERROR fetching option chain: {error_msg}")
-                raise e
+        except Exception as e: 
+            if self.update_count % 10 == 0:
+                print(f"⚠️ Chain fetch error: {e}")
     
     # ==================== INDICATOR CALCULATIONS ====================
     
@@ -681,7 +566,7 @@ class DataEngine:
         tr = pd.concat([tr1, tr2, tr3], axis=1).max(axis=1)
         
         # ATR
-        atr = tr.rolling(window=period, min_periods=1).mean()
+        atr = tr.rolling(window=period).mean()
         self.atr = float(atr.iloc[-1]) if not pd.isna(atr.iloc[-1]) else 0.0
         
         # Directional Movement
@@ -707,7 +592,7 @@ class DataEngine:
         
         self.adx = float(adx.iloc[-1]) if not pd.isna(adx.iloc[-1]) else 0.0
     
-    def _calculate_vwap(self, df:pd.DataFrame):
+    def _calculate_vwap(self, df:  pd.DataFrame):
         """Calculates VWAP."""
         if 'v' not in df.columns or df['v'].sum() == 0:
             self.vwap = float(df['c'].mean())
@@ -746,7 +631,77 @@ class DataEngine:
             # Range complete
             if self.opening_range_high > 0:
                 self.opening_range_set = True
-      
+    
+    # ==================== MOCK DATA (for testing) ====================
+    
+    def _generate_mock_spot_data(self):
+        """Generates mock spot data for testing."""
+        import random
+        
+        base = 24000 + random.randint(-100, 100)
+        self.spot_ltp = base + random.uniform(-10, 10)
+        
+        # Mock indicators
+        self.ema_5 = base + random.uniform(-5, 5)
+        self.ema_13 = base + random.uniform(-10, 10)
+        self.ema_21 = base + random.uniform(-15, 15)
+        self.ema_50 = base + random.uniform(-30, 30)
+        self.rsi = 50 + random.uniform(-20, 20)
+        self.adx = 20 + random.uniform(0, 20)
+        self.atr = 40 + random.uniform(0, 20)
+    
+    def _generate_mock_future_data(self):
+        """Generates mock future data."""
+        import random
+        
+        self.fut_open = self.spot_ltp + random.uniform(-5, 5)
+        self.fut_high = self.fut_open + random.uniform(10, 30)
+        self.fut_low = self.fut_open - random.uniform(10, 30)
+        self.fut_close = self.fut_open + random.uniform(-20, 20)
+        self.fut_ltp = self.fut_close
+        
+        self.candle_body = abs(self.fut_close - self.fut_open)
+        self.candle_range = self.fut_high - self.fut_low
+        self.is_green_candle = self.fut_close > self.fut_open
+        
+        self.vwap = (self.fut_high + self.fut_low + self.fut_close) / 3
+        
+        self.current_volume = 50000 + random.randint(0, 50000)
+        self.volume_relative = 0.8 + random.uniform(0, 1.5)
+    
+    def _generate_mock_option_chain(self):
+        """Generates mock option chain."""
+        import random
+        
+        self.atm_strike = round(self.spot_ltp / 50) * 50
+        
+        for offset in [-150, -100, -50, 0, 50, 100, 150]: 
+            strike = self.atm_strike + offset
+            
+            self.strikes_data[strike] = StrikeOIData(
+                strike=strike,
+                ce_oi=random.randint(100000, 500000),
+                pe_oi=random.randint(100000, 500000),
+                ce_oi_change=random.randint(-10000, 10000),
+                pe_oi_change=random.randint(-10000, 10000),
+                ce_ltp=max(5, 100 - offset * 0.5 + random.uniform(-10, 10)),
+                pe_ltp=max(5, 100 + offset * 0.5 + random.uniform(-10, 10)),
+                ce_iv=15 + random.uniform(-3, 3),
+                pe_iv=15 + random.uniform(-3, 3),
+                ce_delta=0.5 - offset * 0.005,
+                pe_delta=-0.5 - offset * 0.005
+            )
+        
+        self.total_ce_oi = sum(s.ce_oi for s in self.strikes_data.values())
+        self.total_pe_oi = sum(s.pe_oi for s in self.strikes_data.values())
+        self.pcr = self.total_pe_oi / self.total_ce_oi if self.total_ce_oi > 0 else 1.0
+        
+        if self.atm_strike in self.strikes_data:
+            atm = self.strikes_data[self.atm_strike]
+            self.atm_ce_ltp = atm.ce_ltp
+            self.atm_pe_ltp = atm.pe_ltp
+            self.atm_iv = (atm.ce_iv + atm.pe_iv) / 2
+    
     # ==================== UTILITIES ====================
     
     def _rate_limit(self, api_type: str):
@@ -805,8 +760,8 @@ if __name__ == "__main__":
     print("\n🔬 Testing Data Engine...\n")
     
     engine = DataEngine(
-        api_key="eyJraWQiOiJaTUtjVXciLCJhbGciOiJFUzI1NiJ9.eyJleHAiOjI1NTU4NjEzMzUsImlhdCI6MTc2NzQ2MTMzNSwibmJmIjoxNzY3NDYxMzM1LCJzdWIiOiJ7XCJ0b2tlblJlZklkXCI6XCJjOTQyMDNkYS00MDQ4LTQ5OGYtODBlMS0wZWU0ZTA1OWU4NGVcIixcInZlbmRvckludGVncmF0aW9uS2V5XCI6XCJlMzFmZjIzYjA4NmI0MDZjODg3NGIyZjZkODQ5NTMxM1wiLFwidXNlckFjY291bnRJZFwiOlwiMDdmMDA0MGMtZTk4Zi00ZDNmLTk5Y2EtZDc1ZjBlYWU5M2NlXCIsXCJkZXZpY2VJZFwiOlwiZDMyMWIxMzUtZWQ5Mi01ZWJkLWJjMDUtZTY1NDY2OWRiMDM5XCIsXCJzZXNzaW9uSWRcIjpcIjNjZmFlMDU3LWIyNTEtNDdjYS05MGM1LTkyYmZkY2M1NWFkZFwiLFwiYWRkaXRpb25hbERhdGFcIjpcIno1NC9NZzltdjE2WXdmb0gvS0EwYk1yOE5XVzhzdTNvZ080am1ZUzIwZEpSTkczdTlLa2pWZDNoWjU1ZStNZERhWXBOVi9UOUxIRmtQejFFQisybTdRPT1cIixcInJvbGVcIjpcImF1dGgtdG90cFwiLFwic291cmNlSXBBZGRyZXNzXCI6XCIyNDA5OjQwOTA6MTA4ZjpkYzA1OjY1OWY6NDQxODo4NmQ6NWUwYywxNzIuNzAuMTkxLjE3MywzNS4yNDEuMjMuMTIzXCIsXCJ0d29GYUV4cGlyeVRzXCI6MjU1NTg2MTMzNTIxMX0iLCJpc3MiOiJhcGV4LWF1dGgtcHJvZC1hcHAifQ.-vlexEi6oglfAlbHgDWWj09TMl3wNhUz--ywOAskAP6L4No-KNpAkJYbEVVjD-dmq9zvzXK5S38plZFlayxX2g",
-        api_secret="ydGmCf^ik0eHA6eMZaO#hnwJlqTm6GU5",
+        api_key="test",
+        api_secret="test",
         option_expiry="2026-01-06",
         future_expiry="2026-01-27",
         fut_symbol="NSE-NIFTY-27Jan26-FUT",

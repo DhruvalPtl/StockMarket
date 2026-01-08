@@ -192,10 +192,6 @@ class Orchestrator:
         """Main trading loop."""
         print("\n🟢 STARTING TRADING LOOP")
         print("Press Ctrl+C to stop safely.\n")
-        # ✅ NEW: Check for Weekend immediately
-        if datetime.now().weekday() >= 5:  # 5=Saturday, 6=Sunday
-            print("\n🛑 Today is a Weekend. Market is Closed.")
-            return
         
         self.is_running = True
         self.start_time = datetime.now()
