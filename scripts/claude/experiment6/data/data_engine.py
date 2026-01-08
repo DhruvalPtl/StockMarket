@@ -207,6 +207,22 @@ class DataEngine:
     
     # ==================== PUBLIC METHODS ====================
     
+    def is_data_stale(self, max_age_seconds: int = 60) -> bool:
+        """
+        Checks if data is stale (too old).
+        
+        Args:
+            max_age_seconds: Maximum allowed age in seconds (default: 60)
+            
+        Returns:
+            True if data is stale or missing, False if fresh
+        """
+        if not self.timestamp:
+            return True
+        
+        age = (datetime.now() - self.timestamp).total_seconds()
+        return age > max_age_seconds
+    
     def update(self) -> bool:
         """
         Main update method. Fetches all data and calculates indicators.
@@ -215,7 +231,7 @@ class DataEngine:
             True if update successful, False otherwise
         """
         self.update_count += 1
-        self.timestamp = datetime.now()
+        update_start_time = datetime.now()
         
         try:
             # 1.Fetch Spot data (for RSI, EMA)
@@ -244,6 +260,9 @@ class DataEngine:
             # Warmup check
             if self.update_count >= 15:
                 self.warmup_complete = True
+            
+            # Only update timestamp if data fetch was successful
+            self.timestamp = update_start_time
             
             return True
             

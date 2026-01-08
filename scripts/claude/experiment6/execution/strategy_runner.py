@@ -105,26 +105,32 @@ class StrategyRunner:
         if not self.engine.is_ready():
             return None
         
-        # 2.Build MarketData
+        # 2.Check for stale data
+        if self.engine.is_data_stale():
+            if self.tick_count % 10 == 0:  # Log every 10 ticks to avoid spam
+                print(f"⚠️ [{self.strategy_name}] Data is stale, skipping tick")
+            return None
+        
+        # 3.Build MarketData
         market_data = self._build_market_data()
         
-        # 3.Build MarketContext
+        # 4.Build MarketContext
         context = self._build_market_context()
         
-        # 4.If in position, manage it
+        # 5.If in position, manage it
         if self.active_position:
             self._manage_position(market_data, context)
             return None
         
-        # 5.Check cooldown
+        # 6.Check cooldown
         if not self._is_cooldown_complete():
             return None
         
-        # 6.Check market hours
+        # 7.Check market hours
         if not context.is_tradeable():
             return None
         
-        # 7.Call strategy for signal
+        # 8.Call strategy for signal
         signal = self.strategy.check_entry(market_data, context)
         
         if signal:
@@ -169,11 +175,14 @@ class StrategyRunner:
         if atm in self.engine.strikes_data:
             data = self.engine.strikes_data[atm]
             if option_type == 'CE':
-                if data.ce_oi > 0:
-                    return (data.ce_oi_change / data.ce_oi) * 100
+                # Require minimum OI threshold and cap at 500%
+                if data.ce_oi > 1000:
+                    pct = (data.ce_oi_change / data.ce_oi) * 100
+                    return min(max(pct, -500), 500)  # Clamp between -500% and +500%
             else: 
-                if data.pe_oi > 0:
-                    return (data.pe_oi_change / data.pe_oi) * 100
+                if data.pe_oi > 1000:
+                    pct = (data.pe_oi_change / data.pe_oi) * 100
+                    return min(max(pct, -500), 500)  # Clamp between -500% and +500%
         return 0.0
     
     def _build_market_context(self) -> MarketContext:
@@ -355,7 +364,9 @@ class StrategyRunner:
         entry_price = strike_data.ce_ltp if option_type == 'CE' else strike_data.pe_ltp
         strike = strike_data.strike
         
-        if entry_price <= 0.1:
+        # Minimum ₹10 premium to prevent negative stop-loss prices
+        if entry_price <= 10.0:
+            print(f"⚠️ [{self.strategy_name}] Premium too low: ₹{entry_price:.2f}")
             return False
         
         # Get exit parameters
@@ -529,7 +540,9 @@ class StrategyRunner:
         price = self.engine.get_option_price(pos['strike'], pos['type'])
         
         if price <= 0.1:
-            price = pos['entry_price']  # Assume breakeven
+            # Use worst-case estimate: assume 50% loss with minimum ₹1
+            price = max(1.0, pos['entry_price'] * 0.5)
+            print(f"⚠️ [{self.strategy_name}] Strike data missing, using worst-case: ₹{price:.2f}")
         
         self._exit_position(price, reason)
     

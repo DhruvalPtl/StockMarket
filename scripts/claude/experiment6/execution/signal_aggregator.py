@@ -312,8 +312,8 @@ class SignalAggregator:
         # Adjust for context
         mult *= context.get_position_size_multiplier()
         
-        # Clamp
-        return max(0.5, min(1.5, mult))
+        # Only cap upside - allow context to reduce size below 0.5 for safety
+        return min(1.5, mult)
     
     def _get_exit_params(self, signals: List[StrategySignal],
                         context:  MarketContext) -> Tuple[Optional[float], Optional[float]]:
