@@ -278,12 +278,24 @@ class DataEngine:
         Returns:
             LTP or 0 if not found
         """
+        # Try exact strike first
         if strike in self.strikes_data:
             data = self.strikes_data[strike]
             if option_type == 'CE': 
                 return data.ce_ltp
             else: 
                 return data.pe_ltp
+        
+        # Try nearby strikes if exact missing
+        for offset in [50, -50, 100, -100]:
+            nearby_strike = strike + offset
+            if nearby_strike in self.strikes_data:
+                data = self.strikes_data[nearby_strike]
+                price = data.ce_ltp if option_type == 'CE' else data.pe_ltp
+                if price > 0.1:
+                    print(f"⚠️ Strike shift: {strike} -> {nearby_strike}")
+                    return price
+        
         return 0.0
     
     def get_strike_data(self, strike: int) -> Optional[StrikeOIData]: 
@@ -345,26 +357,30 @@ class DataEngine:
         if not self.is_connected:
             return
 
-        try:
-            # 1. SMART TIME WINDOW
-            start_dt = datetime.now() - timedelta(days=5)
-            end_dt = datetime.now()
+        max_retries = 3
+        retry_delay = 2  # seconds
+        
+        for attempt in range(max_retries):
+            try:
+                # 1. SMART TIME WINDOW
+                start_dt = datetime.now() - timedelta(days=5)
+                end_dt = datetime.now()
 
-            resp = self.groww.get_historical_candles(
-                "NSE", "CASH", "NSE-NIFTY",
-                start_dt.strftime("%Y-%m-%d %H:%M:%S"),
-                end_dt.strftime("%Y-%m-%d %H:%M:%S"),
-                self.timeframe
-            )
+                resp = self.groww.get_historical_candles(
+                    "NSE", "CASH", "NSE-NIFTY",
+                    start_dt.strftime("%Y-%m-%d %H:%M:%S"),
+                    end_dt.strftime("%Y-%m-%d %H:%M:%S"),
+                    self.timeframe
+                )
 
-            # Fallback to Live Quote
-            if not resp or 'candles' not in resp or len(resp['candles']) == 0:
-                try:
-                    quote = self.groww.get_quote("NIFTY", "NSE", "CASH")
-                    self.spot_ltp = float(quote['last_price'])
-                except: 
-                    pass
-                return
+                # Fallback to Live Quote
+                if not resp or 'candles' not in resp or len(resp['candles']) == 0:
+                    try:
+                        quote = self.groww.get_quote("NIFTY", "NSE", "CASH")
+                        self.spot_ltp = float(quote['last_price'])
+                    except: 
+                        pass
+                    return
 
             df = pd.DataFrame(resp['candles'])
             cols = ['t', 'o', 'h', 'l', 'c', 'v']
@@ -404,29 +420,52 @@ class DataEngine:
                 ])
                 if len(full_df) > 0:
                     self._calculate_indicators(full_df)
-
-        except Exception as e:
-            print(f"❌ [{self.timeframe}] Spot fetch error: {e}")
+                
+                # Success - break retry loop
+                break
+                
+            except Exception as e:
+                if attempt < max_retries - 1:
+                    # Retry on error
+                    time.sleep(retry_delay)
+                    continue
+                else:
+                    # Final attempt failed
+                    error_msg = str(e)
+                    if "Internal error occurred" in error_msg:
+                        print(f"⚠️ [{self.timeframe}] Groww API internal error - will retry next cycle")
+                    else:
+                        print(f"❌ [{self.timeframe}] Spot fetch error: {error_msg}")
+                    # Try fallback to quote
+                    try:
+                        quote = self.groww.get_quote("NIFTY", "NSE", "CASH")
+                        self.spot_ltp = float(quote['last_price'])
+                    except:
+                        pass
     
     def _fetch_future_data(self):
         """Fetches future data with Gap Detection and Intraday VWAP."""
         if not self.is_connected:
             return
 
-        try:
-            # 1. SMART TIME WINDOW
-            start_dt = datetime.now() - timedelta(days=5)
-            end_dt = datetime.now()
+        max_retries = 3
+        retry_delay = 2  # seconds
+        
+        for attempt in range(max_retries):
+            try:
+                # 1. SMART TIME WINDOW
+                start_dt = datetime.now() - timedelta(days=5)
+                end_dt = datetime.now()
 
-            resp = self.groww.get_historical_candles(
-                "NSE", "FNO", self.fut_symbol,
-                start_dt.strftime("%Y-%m-%d %H:%M:%S"),
-                end_dt.strftime("%Y-%m-%d %H:%M:%S"),
-                self.timeframe
-            )
+                resp = self.groww.get_historical_candles(
+                    "NSE", "FNO", self.fut_symbol,
+                    start_dt.strftime("%Y-%m-%d %H:%M:%S"),
+                    end_dt.strftime("%Y-%m-%d %H:%M:%S"),
+                    self.timeframe
+                )
 
-            if not resp or 'candles' not in resp or len(resp['candles']) == 0:
-                return
+                if not resp or 'candles' not in resp or len(resp['candles']) == 0:
+                    return
 
             df = pd.DataFrame(resp['candles'])
             cols = ['t', 'o', 'h', 'l', 'c', 'v']
@@ -481,22 +520,39 @@ class DataEngine:
                 self._calculate_vwap(today_df)
             else:
                 self.vwap = self.fut_close
-
+            
+            # Success - break retry loop
+            break
+            
         except Exception as e:
-            print(f"❌ [{self.timeframe}] Future fetch error: {e}")
+            if attempt < max_retries - 1:
+                # Retry on error
+                time.sleep(retry_delay)
+                continue
+            else:
+                # Final attempt failed
+                error_msg = str(e)
+                if "Internal error occurred" in error_msg:
+                    print(f"⚠️ [{self.timeframe}] Groww API internal error - will retry next cycle")
+                else:
+                    print(f"❌ [{self.timeframe}] Future fetch error: {error_msg}")
     
     def _fetch_option_chain(self):
         """Fetches option chain data."""
         if not self. is_connected:
             print(f"❌ [{self. timeframe}] No API connection")
-            raise e
+            raise Exception("No API connection")
         
-        try:
-            chain = self.groww.get_option_chain("NSE", "NIFTY", self.option_expiry)
-            
-            if not chain or 'strikes' not in chain:
-                print(f"⚠️ [{self.timeframe}] No option chain data received") 
-                return
+        max_retries = 3
+        retry_delay = 2  # seconds
+        
+        for attempt in range(max_retries):
+            try:
+                chain = self.groww.get_option_chain("NSE", "NIFTY", self.option_expiry)
+                
+                if not chain or 'strikes' not in chain:
+                    print(f"⚠️ [{self.timeframe}] No option chain data received") 
+                    return
             
             # Strikes to fetch
             strikes_to_fetch = {
@@ -566,9 +622,22 @@ class DataEngine:
                 if self.atm_iv > 0:
                     self.iv_history.append(self.atm_iv)
             
-        except Exception as e:  
-            print(f"❌ [{self.timeframe}] CRITICAL ERROR fetching option chain: {e}")
-            raise e
+            # Success - break retry loop
+            break
+            
+        except Exception as e:
+            if attempt < max_retries - 1:
+                # Retry on error
+                time.sleep(retry_delay)
+                continue
+            else:
+                # Final attempt failed
+                error_msg = str(e)
+                if "Internal error occurred" in error_msg:
+                    print(f"⚠️ [{self.timeframe}] Groww API internal error (option chain) - will retry next cycle")
+                else:
+                    print(f"❌ [{self.timeframe}] CRITICAL ERROR fetching option chain: {error_msg}")
+                raise e
     
     # ==================== INDICATOR CALCULATIONS ====================
     

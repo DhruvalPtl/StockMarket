@@ -412,6 +412,16 @@ class StrategyRunner:
         current_price = self.engine.get_option_price(pos['strike'], pos['type'])
         
         if current_price <= 0.1:
+            # Check how long we've been waiting
+            time_in_position = (datetime.now() - pos['entry_time']).total_seconds()
+            max_wait_seconds = 300  # 5 minutes
+            
+            if time_in_position > max_wait_seconds:
+                # Force exit at entry price (break-even)
+                print(f"⚠️ Strike missing for {time_in_position}s - Force exit")
+                self._exit_position(pos['entry_price'], "STRIKE_MISSING")
+                return
+            
             return  # Don't act on zero price
         
         # Update risk manager

@@ -632,6 +632,9 @@ class DataEngine:
                 if self.atm_iv > 0:
                     self.iv_history.append(self.atm_iv)
             
+            # 📊 DETAILED MARKET SNAPSHOT LOGGING
+            self._log_market_snapshot()
+            
         except Exception as e:  
             print(f"❌ [{self.timeframe}] CRITICAL ERROR fetching option chain: {e}")
             raise e
@@ -762,6 +765,44 @@ class DataEngine:
             time.sleep(wait)
         
         self.last_api_call[api_type] = time.time()
+    
+    def _log_market_snapshot(self):
+        """Logs detailed market snapshot to terminal."""
+        print(f"\n{'='*70}")
+        print(f"📊 [{self.timeframe.upper()}] MARKET UPDATE @ {datetime.now().strftime('%H:%M:%S')}")
+        print(f"{'='*70}")
+        print(f"💹 PRICES:")
+        print(f"   Spot:    ₹{self.spot_ltp:8,.2f}")
+        print(f"   Future:  ₹{self.fut_ltp:8,.2f}  (Premium: {(self.fut_ltp - self.spot_ltp):+.2f})")
+        print(f"   VWAP:    ₹{self.vwap:8,.2f}")
+        
+        print(f"\n📈 INDICATORS:")
+        print(f"   RSI:     {self.rsi:6.1f}")
+        print(f"   ADX:     {self.adx:6.1f}")
+        print(f"   ATR:     {self.atr:6.1f}")
+        print(f"   EMA-5:   ₹{self.ema_5:8,.2f}")
+        print(f"   EMA-13:  ₹{self.ema_13:8,.2f}")
+        print(f"   EMA-21:  ₹{self.ema_21:8,.2f}")
+        
+        print(f"\n🎯 OPTIONS (ATM: {self.atm_strike}):")
+        print(f"   PCR:         {self.pcr:6.2f}")
+        print(f"   Total CE OI: {self.total_ce_oi:12,}")
+        print(f"   Total PE OI: {self.total_pe_oi:12,}")
+        
+        if self.atm_strike in self.strikes_data:
+            atm = self.strikes_data[self.atm_strike]
+            print(f"   ATM CE:      ₹{atm.ce_ltp:7.2f}  (OI: {atm.ce_oi:,})")
+            print(f"   ATM PE:      ₹{atm.pe_ltp:7.2f}  (OI: {atm.pe_oi:,})")
+        
+        # Show nearby strikes
+        print(f"\n📋 STRIKE CHAIN:")
+        strikes_sorted = sorted([s for s in self.strikes_data.keys() if abs(s - self.atm_strike) <= 100])
+        for strike in strikes_sorted:
+            data = self.strikes_data[strike]
+            marker = "🔴" if strike == self.atm_strike else "  "
+            print(f"   {marker} {strike}: CE ₹{data.ce_ltp:6.2f} | PE ₹{data.pe_ltp:6.2f}")
+        
+        print(f"{'='*70}\n")
     
     def _log_snapshot(self):
         """Logs current state to CSV."""

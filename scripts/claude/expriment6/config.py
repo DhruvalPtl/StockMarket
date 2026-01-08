@@ -18,8 +18,8 @@ class BotConfig:
     # ============================================================
     # 1.API CREDENTIALS & CONNECTION
     # ============================================================
-    API_KEY = "eyJraWQiOiJaTUtjVXciLCJhbGciOiJFUzI1NiJ9.eyJleHAiOjI1NTU4NjEzMzUsImlhdCI6MTc2NzQ2MTMzNSwibmJmIjoxNzY3NDYxMzM1LCJzdWIiOiJ7XCJ0b2tlblJlZklkXCI6XCJjOTQyMDNkYS00MDQ4LTQ5OGYtODBlMS0wZWU0ZTA1OWU4NGVcIixcInZlbmRvckludGVncmF0aW9uS2V5XCI6XCJlMzFmZjIzYjA4NmI0MDZjODg3NGIyZjZkODQ5NTMxM1wiLFwidXNlckFjY291bnRJZFwiOlwiMDdmMDA0MGMtZTk4Zi00ZDNmLTk5Y2EtZDc1ZjBlYWU5M2NlXCIsXCJkZXZpY2VJZFwiOlwiZDMyMWIxMzUtZWQ5Mi01ZWJkLWJjMDUtZTY1NDY2OWRiMDM5XCIsXCJzZXNzaW9uSWRcIjpcIjNjZmFlMDU3LWIyNTEtNDdjYS05MGM1LTkyYmZkY2M1NWFkZFwiLFwiYWRkaXRpb25hbERhdGFcIjpcIno1NC9NZzltdjE2WXdmb0gvS0EwYk1yOE5XVzhzdTNvZ080am1ZUzIwZEpSTkczdTlLa2pWZDNoWjU1ZStNZERhWXBOVi9UOUxIRmtQejFFQisybTdRPT1cIixcInJvbGVcIjpcImF1dGgtdG90cFwiLFwic291cmNlSXBBZGRyZXNzXCI6XCIyNDA5OjQwOTA6MTA4ZjpkYzA1OjY1OWY6NDQxODo4NmQ6NWUwYywxNzIuNzAuMTkxLjE3MywzNS4yNDEuMjMuMTIzXCIsXCJ0d29GYUV4cGlyeVRzXCI6MjU1NTg2MTMzNTIxMX0iLCJpc3MiOiJhcGV4LWF1dGgtcHJvZC1hcHAifQ.-vlexEi6oglfAlbHgDWWj09TMl3wNhUz--ywOAskAP6L4No-KNpAkJYbEVVjD-dmq9zvzXK5S38plZFlayxX2g"
-    API_SECRET = "ydGmCf^ik0eHA6eMZaO#hnwJlqTm6GU5"
+    API_KEY = "eyJraWQiOiJaTUtjVXciLCJhbGciOiJFUzI1NiJ9.eyJleHAiOjI1NTYyNTI4NzUsImlhdCI6MTc2Nzg1Mjg3NSwibmJmIjoxNzY3ODUyODc1LCJzdWIiOiJ7XCJ0b2tlblJlZklkXCI6XCI2N2U2MGI0Yy0wZjRjLTQ3YTItYWYzZi02ZTJhMzRkN2RiZWNcIixcInZlbmRvckludGVncmF0aW9uS2V5XCI6XCJlMzFmZjIzYjA4NmI0MDZjODg3NGIyZjZkODQ5NTMxM1wiLFwidXNlckFjY291bnRJZFwiOlwiMDdmMDA0MGMtZTk4Zi00ZDNmLTk5Y2EtZDc1ZjBlYWU5M2NlXCIsXCJkZXZpY2VJZFwiOlwiYWM2YTBhMDUtMjg5MS01ZjgyLWI5ZjgtOTEyODViOGZlZmZiXCIsXCJzZXNzaW9uSWRcIjpcImViMjEzMGVkLWE4YzktNDQ3My05M2M5LTllNjViZGFiZWJkMFwiLFwiYWRkaXRpb25hbERhdGFcIjpcIno1NC9NZzltdjE2WXdmb0gvS0EwYk1yOE5XVzhzdTNvZ080am1ZUzIwZEpSTkczdTlLa2pWZDNoWjU1ZStNZERhWXBOVi9UOUxIRmtQejFFQisybTdRPT1cIixcInJvbGVcIjpcImF1dGgtdG90cFwiLFwic291cmNlSXBBZGRyZXNzXCI6XCIyNDA5OjQwYzE6MWU6ZjZmOmU4MWU6NzEzZTplNTQwOmIxZjYsMTcyLjcwLjE5Mi4xODEsMzUuMjQxLjIzLjEyM1wiLFwidHdvRmFFeHBpcnlUc1wiOjI1NTYyNTI4NzU5NjF9IiwiaXNzIjoiYXBleC1hdXRoLXByb2QtYXBwIn0.Hfu_-59FrzFLxVlkWzZDvRCOeuESpYNMkfCTneqdFMFsXLWIXBx9NIPkBTLeesRys8VpgSl7NOxGa4J2JIR4iw"
+    API_SECRET = "JLs8dG45z-E8N@W$3)9iH!U0w&z@uoW)"
     
     # Rate Limiting (Seconds between calls)
     RATE_LIMIT_SPOT = 0.5
@@ -29,7 +29,7 @@ class BotConfig:
     # ============================================================
     # 2.CONTRACT DETAILS
     # ============================================================
-    OPTION_EXPIRY = "2026-01-06"      # Weekly options expiry
+    OPTION_EXPIRY = "2026-01-13"      # Weekly options expiry
     FUTURE_EXPIRY = "2026-01-27"      # Monthly futures expiry
     
     # ============================================================

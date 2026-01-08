@@ -251,15 +251,18 @@ class FlattradeWrapper:
                 return {'strikes': {}}
             
             print(f"✅ Received {len(ret['values'])} option contracts")
-            print(f"📈 Fetching live quotes for {len(ret['values'])} options...")
             
-            # Convert to Groww format
-            strikes = {}
-            for idx, opt in enumerate(ret['values']):
+            # ⚡ PERFORMANCE FIX: Filter strikes BEFORE fetching quotes
+            # Only need ATM ±150 range (7 strikes) instead of all 200!
+            needed_strikes = set(range(int(center_strike) - 150, int(center_strike) + 200, 50))
+            
+            # First pass: Build strikes dict with tokens
+            strikes_with_tokens = {}
+            for opt in ret['values']:
                 strike_str = opt.get('strprc', '0')
                 try:
                     strike = float(strike_str)
-                    if strike == 0:
+                    if strike == 0 or strike not in needed_strikes:
                         continue
                 except (ValueError, TypeError):
                     continue
@@ -267,38 +270,50 @@ class FlattradeWrapper:
                 opt_type = opt.get('optt', '')  # 'CE' or 'PE'
                 token = opt.get('token', '')
                 
-                if strike not in strikes:
-                    strikes[strike] = {}
+                if strike not in strikes_with_tokens:
+                    strikes_with_tokens[strike] = {}
                 
-                # Get live quote for this option
-                ltp = 0
-                oi = 0
-                volume = 0
-                try:
-                    quote_data = self.api.get_quotes(exchange='NFO', token=token)
-                    if quote_data:
-                        ltp = float(quote_data.get('lp', 0))
-                        oi = int(quote_data.get('oi', 0))
-                        volume = int(quote_data.get('volume', 0)) if 'volume' in quote_data else 0
-                except Exception as e:
-                    # If quote fetch fails, use default values
-                    pass
-                
-                strikes[strike][opt_type] = {
+                strikes_with_tokens[strike][opt_type] = {
                     'symbol': opt.get('tsym', ''),
-                    'ltp': ltp,
-                    'oi': oi,
-                    'open_interest': oi,
-                    'volume': volume,
-                    'greeks': {},
                     'token': token
                 }
-                
-                # Progress indicator
-                if (idx + 1) % 20 == 0:
-                    print(f"   Fetched {idx + 1}/{len(ret['values'])} quotes...")
             
-            print(f"✅ Processed {len(strikes)} unique strikes with live data")
+            # Second pass: Fetch quotes ONLY for needed strikes
+            total_needed = sum(len(v) for v in strikes_with_tokens.values())
+            print(f"📈 Fetching live quotes for {total_needed} options (filtered from {len(ret['values'])})...")
+            
+            strikes = {}
+            fetched_count = 0
+            for strike, options in strikes_with_tokens.items():
+                strikes[strike] = {}
+                
+                for opt_type, opt_data in options.items():
+                    # Get live quote
+                    ltp = 0
+                    oi = 0
+                    volume = 0
+                    try:
+                        quote_data = self.api.get_quotes(exchange='NFO', token=opt_data['token'])
+                        if quote_data:
+                            ltp = float(quote_data.get('lp', 0))
+                            oi = int(quote_data.get('oi', 0))
+                            volume = int(quote_data.get('volume', 0)) if 'volume' in quote_data else 0
+                    except Exception:
+                        pass
+                    
+                    strikes[strike][opt_type] = {
+                        'symbol': opt_data['symbol'],
+                        'ltp': ltp,
+                        'oi': oi,
+                        'open_interest': oi,
+                        'volume': volume,
+                        'greeks': {},
+                        'token': opt_data['token']
+                    }
+                    
+                    fetched_count += 1
+            
+            print(f"✅ Processed {len(strikes)} strikes ({fetched_count} options) with live data")
             return {'strikes': strikes}
             
         except Exception as e:

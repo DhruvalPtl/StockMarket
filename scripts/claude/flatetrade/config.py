@@ -20,7 +20,7 @@ class BotConfig:
     # ============================================================
     BROKER = "FLATTRADE"
     USER_ID = "FZ31397"  # Your Flattrade user ID
-    USER_TOKEN = "1d08b534addf33990dd6913fb011bbc5d42afbf30d08f2a6411ce5076266db31"  # Your token
+    USER_TOKEN = "8c710f451a2a4ee0fd71191398832d3f49881a3ae4d73077b15df8a4ab07be97"  # Your token
 
 
     
