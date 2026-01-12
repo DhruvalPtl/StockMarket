@@ -1,0 +1,3 @@
+Entry_Time,Exit_Time,Strategy,Timeframe,Symbol,Type,Strike,Entry_Price,Exit_Price,Max_Price,PnL,Gross_PnL,PnL_Pct,Balance,Exit_Reason
+10:16:41,10:17:13,Momentum_Breakout,1minute,NIFTY-25550-PE,PE,25550,70.55,65.9,70.6,-478.7499999999994,-348.7499999999994,-9.047956532010383,0.0,SHUTDOWN
+10:46:56,10:48:33,Momentum_Breakout,1minute,NIFTY-25550-PE,PE,25550,71.85,66.35,74.9,-542.5,-412.5,-10.0672697749942,0.0,STOP_LOSS
