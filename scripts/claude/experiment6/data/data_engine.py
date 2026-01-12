@@ -419,7 +419,8 @@ class DataEngine:
                 )
                 self.candles.append(candle)
             
-            # Calculate indicators
+            # Calculate price-based indicators from SPOT data
+            # (We trade based on SPOT price movements)
             self._calculate_indicators(df)
             
         except Exception as e:
@@ -486,7 +487,8 @@ class DataEngine:
             self.candle_range = self.fut_high - self.fut_low
             self.is_green_candle = self.fut_close > self.fut_open
             
-            # VWAP
+            # Calculate VWAP from FUTURE data
+            # (NIFTY index has no volume - must use future volume)
             self._calculate_vwap(df)
             
         except Exception as e:
@@ -583,7 +585,11 @@ class DataEngine:
     # ==================== INDICATOR CALCULATIONS ====================
     
     def _calculate_indicators(self, df: pd.DataFrame):
-        """Calculates technical indicators."""
+        """
+        Calculates technical indicators from SPOT data.
+        Why? We trade based on SPOT NIFTY movements.
+        RSI, ADX, ATR = price-based (not volume-based).
+        """
         closes = df['c'].astype(float)
         highs = df['h'].astype(float)
         lows = df['l'].astype(float)
@@ -649,7 +655,12 @@ class DataEngine:
         self.adx = float(adx.iloc[-1]) if not pd.isna(adx.iloc[-1]) else 0.0
     
     def _calculate_vwap(self, df:  pd.DataFrame):
-        """Calculates VWAP."""
+        """
+        Calculates VWAP from FUTURE candles.
+        Why? NIFTY is an index - it has NO volume!
+        Only NIFTY FUTURE has actual traded volume.
+        Compare: SPOT price vs FUTURE VWAP
+        """
         if 'v' not in df.columns or df['v'].sum() == 0:
             self.vwap = float(df['c'].mean())
             return

@@ -33,6 +33,7 @@ from market_intelligence.bias_calculator import BiasCalculator, BiasState
 from market_intelligence.order_flow_tracker import OrderFlowTracker
 from market_intelligence.liquidity_mapper import LiquidityMapper
 from execution.risk_manager import RiskManager, Position
+from loggers.enhanced_logger import GrowwLogger
 
 
 class StrategyRunner:
@@ -69,6 +70,9 @@ class StrategyRunner:
         # Identity
         self.strategy_name = strategy.STRATEGY_NAME
         self.timeframe = engine.timeframe
+        
+        # Per-strategy logger
+        self.logger = GrowwLogger(self.strategy_name, self.timeframe)
         
         # Position state
         self.active_position:  Optional[Dict] = None
@@ -132,6 +136,15 @@ class StrategyRunner:
         
         # 8.Call strategy for signal
         signal = self.strategy.check_entry(market_data, context)
+        
+        # 9.Log tick (market snapshot) - log after signal generation
+        signal_status = signal.signal_type.value if signal else "SCANNING"
+        self.logger.log_tick(
+            engine=self.engine,
+            signal=signal_status,
+            daily_pnl=self.daily_pnl,
+            reason=signal.reason if signal else ""
+        )
         
         if signal:
             self.signals_generated += 1
@@ -500,31 +513,28 @@ class StrategyRunner:
         self.daily_pnl += net_pnl
         self.last_exit_time = datetime.now()
         
-        # Create trade record
+        # Create trade record for enhanced logger
         trade_record = {
-            'entry_time': pos['entry_time'],
-            'exit_time': datetime.now(),
-            'strategy': self.strategy_name,
-            'timeframe': self.timeframe,
-            'symbol': pos['symbol'],
-            'type': pos['type'],
-            'strike': pos['strike'],
-            'entry_price': pos['entry_price'],
-            'exit_price': exit_price,
-            'peak_price': self.peak_price,
-            'gross_pnl':  gross_pnl,
-            'net_pnl':  net_pnl,
-            'pnl_pct': pnl_pct,
-            'exit_reason': reason
+            'Entry_Time': pos['entry_time'],
+            'Exit_Time': datetime.now().strftime("%H:%M:%S"),
+            'Strategy': self.strategy_name,
+            'Timeframe': self.timeframe,
+            'Symbol': pos['symbol'],
+            'Type': pos['type'],
+            'Strike': pos['strike'],
+            'Entry_Price': pos['entry_price'],
+            'Exit_Price': exit_price,
+            'Max_Price': self.peak_price,
+            'PnL': net_pnl,
+            'Gross_PnL': gross_pnl,
+            'PnL_Pct': pnl_pct,
+            'Balance': getattr(self.risk_manager, 'available_capital', 0.0),
+            'Exit_Reason': reason
         }
         self.trades_today.append(trade_record)
         
-        # Print summary
-        icon = "✅" if net_pnl > 0 else "🔻"
-        print(f"\n{icon} EXIT [{self.strategy_name}]: {pos['type']} {pos['strike']}")
-        print(f"   Entry: ₹{pos['entry_price']:.2f} → Exit: ₹{exit_price:.2f}")
-        print(f"   PnL: ₹{net_pnl:+,.2f} ({pnl_pct:+.2f}%)")
-        print(f"   Reason: {reason}")
+        # Log trade to CSV
+        self.logger.log_trade(trade_record)
         
         # Cleanup
         self.engine.unregister_active_strike(pos['strike'])
@@ -550,7 +560,7 @@ class StrategyRunner:
     
     def get_summary(self) -> Dict[str, Any]: 
         """Returns strategy performance summary."""
-        wins = sum(1 for t in self.trades_today if t['net_pnl'] > 0)
+        wins = sum(1 for t in self.trades_today if t['PnL'] > 0)
         losses = len(self.trades_today) - wins
         
         return {

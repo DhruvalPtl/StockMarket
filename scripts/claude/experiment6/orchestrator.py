@@ -101,6 +101,7 @@ class Orchestrator:
         
         # Setup logging
         self._setup_logging()
+        self._setup_csv_logging()
         
         # Generate future symbol
         self.fut_symbol = get_future_symbol(self.config.FUTURE_EXPIRY)
@@ -158,6 +159,38 @@ class Orchestrator:
         self.logger.info("=" * 60)
         print(f"📝 Logging to: {log_file}")
     
+    def _setup_csv_logging(self):
+        """Setup CSV logging for trade book and market snapshots."""
+        import csv
+        
+        # Create logs directory (not the log directory with subfolders)
+        log_dir = os.path.join(os.path.dirname(os.path.abspath(__file__)), 'logs')
+        os.makedirs(log_dir, exist_ok=True)
+        
+        timestamp = datetime.now().strftime('%Y%m%d_%H%M%S')
+        
+        # Trade book CSV
+        self.trade_book_path = os.path.join(log_dir, f'Live_Trade_Book_{timestamp}.csv')
+        with open(self.trade_book_path, 'w', newline='', encoding='utf-8') as f:
+            writer = csv.writer(f)
+            writer.writerow([
+                'Entry_Time', 'Exit_Time', 'Strategy', 'Timeframe', 'Direction',
+                'Strike', 'Entry_Price', 'Exit_Price', 'Lots', 'PnL',
+                'Exit_Reason', 'Duration_Min', 'Regime', 'Bias', 'Confluence'
+            ])
+        
+        # Market tracker CSV
+        self.tracker_path = os.path.join(log_dir, f'Live_Super_Tracker_{timestamp}.csv')
+        with open(self.tracker_path, 'w', newline='', encoding='utf-8') as f:
+            writer = csv.writer(f)
+            writer.writerow([
+                'Timestamp', 'Spot_LTP', 'Fut_LTP', 'Premium', 'VWAP', 'RSI',
+                'ADX', 'ATR', 'PCR', 'Regime', 'Bias', 'Active_Positions', 'Daily_PnL'
+            ])
+        
+        self._log_and_print(f"CSV logging: {self.trade_book_path}", 'INFO')
+        self._log_and_print(f"Market tracker: {self.tracker_path}", 'INFO')
+    
     def _log_and_print(self, message: str, level: str = 'INFO'):
         """Logs and prints a message."""
         if hasattr(self, 'logger'):
@@ -180,12 +213,15 @@ class Orchestrator:
         """Reset system after max daily loss for fresh start."""
         self.reset_count += 1
         
+        stats = self.risk_manager.daily_stats
+        win_rate = (stats.trades_won / stats.trades_taken * 100) if stats.trades_taken > 0 else 0
+        
         # Log the reset
         reset_msg = f"\n{'='*60}\n"
         reset_msg += f"🔄 AUTO-RESET #{self.reset_count} - MAX DAILY LOSS HIT\n"
-        reset_msg += f"Previous Loss: ₹{abs(self.risk_manager.daily_stats.net_pnl):.2f}\n"
-        reset_msg += f"Trades Taken: {self.risk_manager.daily_stats.trades_taken}\n"
-        reset_msg += f"Win Rate: {self.risk_manager.daily_stats.win_rate:.1f}%\n"
+        reset_msg += f"Previous Loss: ₹{abs(stats.net_pnl):.2f}\n"
+        reset_msg += f"Trades Taken: {stats.trades_taken}\n"
+        reset_msg += f"Win Rate: {win_rate:.1f}%\n"
         reset_msg += f"Starting Fresh Session with Capital: ₹{self.config.Risk.CAPITAL_PER_STRATEGY:.2f}\n"
         reset_msg += f"{'='*60}\n"
         
@@ -318,11 +354,14 @@ class Orchestrator:
                     for tf, instance in self.timeframes.items():
                         self._process_timeframe(instance, no_new_entries)
                 
-                # 6.Periodic status update
+                # 6.Print and log real-time market status (every iteration)
+                self._print_live_status()
+                
+                # 7.Periodic detailed status (every 30 seconds)
                 if self.iteration % 30 == 0:
                     self._print_status()
                 
-                # 7.Loop delay
+                # 8.Loop delay
                 time.sleep(1)
                 
         except KeyboardInterrupt:
@@ -373,6 +412,10 @@ class Orchestrator:
     
     def _handle_signals(self, signals: List[StrategySignal], instance: TimeframeInstance):
         """Handles aggregated signals for execution."""
+        # Log signal generation
+        signal_info = f"Signals received: {len(signals)} from {instance.timeframe}"
+        self._log_and_print(signal_info, 'INFO')
+        
         # Build context from first runner (they share the same engine)
         runner = instance.runners[0]
         market_data = runner._build_market_data()
@@ -381,8 +424,14 @@ class Orchestrator:
         # Aggregate signals
         agg_signal = self.signal_aggregator.aggregate(signals, context)
         
+        # Log aggregation result
+        agg_info = f"Aggregated: {agg_signal.decision.value} | Confluence: {agg_signal.confluence_score}"
+        self._log_and_print(agg_info, 'INFO')
+        
         # Check if should execute
         if agg_signal.decision != TradeDecision.EXECUTE:
+            skip_msg = f"Trade skipped: {agg_signal.skip_reason}"
+            self._log_and_print(skip_msg, 'INFO')
             return
         
         # Find the runner that generated the best signal
@@ -409,7 +458,8 @@ class Orchestrator:
             self.config.Risk.CAPITAL_PER_STRATEGY * self.config.Risk.MAX_CAPITAL_USAGE_PCT
         )
         
-        if not strike_data: 
+        if not strike_data:
+            self._log_and_print("No affordable strike found", 'WARNING')
             return
         
         # Risk check
@@ -420,12 +470,24 @@ class Orchestrator:
         )
         
         if risk_decision.action == RiskAction.BLOCK:
-            if self.iteration % 10 == 0:
-                print(f"🚫 Trade blocked:  {risk_decision.reason}")
+            block_msg = f"🚫 Trade blocked: {risk_decision.reason}"
+            print(block_msg)
+            self._log_and_print(block_msg, 'WARNING')
             return
         
         # Print aggregator decision
         self.signal_aggregator.print_decision(agg_signal)
+        
+        # Get entry price based on option type
+        entry_price = strike_data.ce_ltp if option_type == 'CE' else strike_data.pe_ltp
+        
+        # Log entry attempt
+        entry_msg = (
+            f"🟢 ENTERING POSITION: {option_type} {strike_data.strike} "
+            f"@ ₹{entry_price:.2f} | Strategy: {agg_signal.best_signal.strategy_name}"
+        )
+        print(entry_msg)
+        self._log_and_print(entry_msg, 'INFO')
         
         # Execute through the best runner
         best_runner.enter_position(
@@ -436,9 +498,64 @@ class Orchestrator:
     def _force_exit_all(self, reason: str):
         """Forces exit of all positions."""
         print(f"\n⚠️ Force exiting all positions:  {reason}")
+        self._log_and_print(f"Force exiting all positions: {reason}", 'WARNING')
         for runner in self.all_runners: 
             if runner.has_position():
                 runner.force_exit(reason)
+    
+    def _print_live_status(self):
+        """Prints and logs real-time market status every second."""
+        # Get market data from first engine
+        first_tf = list(self.timeframes.keys())[0]
+        engine = self.timeframes[first_tf].engine
+        
+        # Get regime and bias from first timeframe
+        instance = self.timeframes[first_tf]
+        
+        # Build status line
+        now = datetime.now()
+        status_line = (
+            f"[{now.strftime('%H:%M:%S')}] "
+            f"Spot: {engine.spot_ltp:.2f} | "
+            f"Fut: {engine.fut_ltp:.2f} | "
+            f"VWAP: {engine.vwap:.2f} | "
+            f"RSI: {engine.rsi:.1f} | "
+            f"ADX: {engine.adx:.1f} | "
+            f"ATR: {engine.atr:.1f} | "
+            f"PCR: {engine.pcr:.2f} | "
+            f"Pos: {len([r for r in self.all_runners if r.has_position()])}/{self.config.Risk.MAX_CONCURRENT_POSITIONS} | "
+            f"P&L: ₹{self.risk_manager.daily_stats.net_pnl:+,.0f}"
+        )
+        
+        # Print to console
+        print(status_line)
+        
+        # Log to file
+        self._log_and_print(status_line, 'INFO')
+        
+        # Log to CSV (every 60 seconds to avoid huge files)
+        if self.iteration % 60 == 0:
+            import csv
+            try:
+                with open(self.tracker_path, 'a', newline='', encoding='utf-8') as f:
+                    writer = csv.writer(f)
+                    writer.writerow([
+                        now.strftime('%Y-%m-%d %H:%M:%S'),
+                        f"{engine.spot_ltp:.2f}",
+                        f"{engine.fut_ltp:.2f}",
+                        f"{engine.fut_ltp - engine.spot_ltp:.2f}",
+                        f"{engine.vwap:.2f}",
+                        f"{engine.rsi:.1f}",
+                        f"{engine.adx:.1f}",
+                        f"{engine.atr:.1f}",
+                        f"{engine.pcr:.2f}",
+                        "UNKNOWN",  # Regime
+                        "UNKNOWN",  # Bias
+                        len([r for r in self.all_runners if r.has_position()]),
+                        f"{self.risk_manager.daily_stats.net_pnl:.2f}"
+                    ])
+            except Exception as e:
+                self._log_and_print(f"CSV write error: {e}", 'ERROR')
     
     def _print_status(self):
         """Prints periodic status update."""
@@ -449,29 +566,35 @@ class Orchestrator:
         # Position summary
         active_positions = [r for r in self.all_runners if r.has_position()]
         
-        print(f"\n{'─'*60}")
-        print(f"📊 STATUS @ {datetime.now().strftime('%H:%M:%S')}")
-        print(f"{'─'*60}")
-        print(f"Spot: {engine.spot_ltp:.2f} | Future: {engine.fut_ltp:.2f} | "
-              f"RSI: {engine.rsi:.1f} | ADX: {engine.adx:.1f}")
-        print(f"VWAP: {engine.vwap:.2f} | PCR: {engine.pcr:.2f} | "
-              f"ATM: {engine.atm_strike}")
+        status_block = f"\n{'─'*60}\n"
+        status_block += f"📊 STATUS @ {datetime.now().strftime('%H:%M:%S')}\n"
+        status_block += f"{'─'*60}\n"
+        status_block += f"Spot: {engine.spot_ltp:.2f} | Future: {engine.fut_ltp:.2f} | "
+        status_block += f"RSI: {engine.rsi:.1f} | ADX: {engine.adx:.1f}\n"
+        status_block += f"VWAP: {engine.vwap:.2f} | PCR: {engine.pcr:.2f} | "
+        status_block += f"ATM: {engine.atm_strike}\n"
         
         if active_positions:
-            print(f"\n🔥 Active Positions: {len(active_positions)}")
+            status_block += f"\n🔥 Active Positions: {len(active_positions)}\n"
             for r in active_positions: 
                 pos = r.active_position
-                print(f"   • {r.strategy_name} ({r.timeframe}): "
-                      f"{pos['type']} {pos['strike']} @ ₹{pos['entry_price']:.2f}")
+                status_block += f"   • {r.strategy_name} ({r.timeframe}): "
+                status_block += f"{pos['type']} {pos['strike']} @ ₹{pos['entry_price']:.2f}\n"
         else:
-            print(f"\n💤 No Active Positions (Scanning...)")
+            status_block += f"\n💤 No Active Positions (Scanning...)\n"
         
         # Risk summary
         risk_summary = self.risk_manager.get_risk_summary()
-        print(f"\n📈 Daily:  Trades={risk_summary['trades_today']} | "
-              f"PnL=₹{risk_summary['net_pnl']:+,.2f} | "
-              f"Win%={risk_summary['win_rate']:.0f}%")
-        print(f"{'─'*60}\n")
+        status_block += f"\n📈 Daily:  Trades={risk_summary['trades_today']} | "
+        status_block += f"PnL=₹{risk_summary['net_pnl']:+,.2f} | "
+        status_block += f"Win%={risk_summary['win_rate']:.0f}%\n"
+        status_block += f"{'─'*60}\n"
+        
+        # Print to console
+        print(status_block)
+        
+        # Log to file
+        self._log_and_print(status_block.strip(), 'INFO')
     
     def _shutdown(self):
         """Safe shutdown sequence."""
