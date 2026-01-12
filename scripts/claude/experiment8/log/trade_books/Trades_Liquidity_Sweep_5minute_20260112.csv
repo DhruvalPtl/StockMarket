@@ -1,2 +1,0 @@
-Entry_Time,Exit_Time,Strategy,Timeframe,Symbol,Type,Strike,Entry_Price,Exit_Price,Max_Price,PnL,Gross_PnL,PnL_Pct,Balance,Exit_Reason
-10:36:50,10:42:30,Liquidity_Sweep,5minute,NIFTY-25550-CE,CE,25550,100.4,91.4,100.4,-805.0,-675.0,-10.690571049136786,0.0,STOP_LOSS

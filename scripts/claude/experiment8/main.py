@@ -1,7 +1,9 @@
 """
-EXPERIMENT 6 - MAIN ENTRY POINT
+EXPERIMENT 8 - MAIN ENTRY POINT (FLATTRADE API)
 
 Intelligent Multi-Strategy Trading System
+Converted from Groww API (Experiment 6) to Flattrade API.
+
 Run this file to start the trading bot.
 
 Usage:
@@ -32,8 +34,8 @@ def print_banner():
     ║   ███████╗██╔╝ ██╗██║     ███████╗██║  ██║██║██║ ╚═╝ ██║     ║
     ║   ╚══════╝╚═╝  ╚═╝╚═╝     ╚══════╝╚═╝  ╚═╝╚═╝╚═╝     ╚═╝     ║
     ║                                                               ║
-    ║          NIFTY OPTIONS ALGO BOT - Experiment 6                ║
-    ║              Intelligent Multi-Strategy System                ║
+    ║          NIFTY OPTIONS ALGO BOT - Experiment 8                ║
+    ║            Flattrade API - Multi-Strategy System              ║
     ║                                                               ║
     ╚═══════════════════════════════════════════════════════════════╝
     """

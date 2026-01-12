@@ -90,7 +90,7 @@ class Orchestrator:
     
     def __init__(self):
         print("\n" + "=" * 60)
-        print("🚀 EXPERIMENT 6 - INTELLIGENT TRADING SYSTEM")
+        print("🚀 EXPERIMENT 8 - FLATTRADE API TRADING SYSTEM")
         print("=" * 60)
         
         self.config = BotConfig
@@ -258,8 +258,8 @@ class Orchestrator:
             
             # 1.Data Engine
             engine = DataEngine(
-                api_key=self.config.API_KEY,
-                api_secret=self.config.API_SECRET,
+                user_token=self.config.USER_TOKEN,
+                user_id=self.config.USER_ID,
                 option_expiry=self.config.OPTION_EXPIRY,
                 future_expiry=self.config.FUTURE_EXPIRY,
                 fut_symbol=self.fut_symbol,
