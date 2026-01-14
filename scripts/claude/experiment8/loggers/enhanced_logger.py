@@ -12,8 +12,9 @@ from config import BotConfig
 
 class FlattradeLogger:
     """
-    Per-Strategy Logger.
-    Each strategy instance gets one of these to record its specific actions.
+    Per-Strategy Logger for Flattrade API Trading System.
+    Each strategy instance gets one of these to record its specific actions,
+    trades, and performance metrics to CSV files.
     """
     
     def __init__(self, strategy_name: str, timeframe: str):
