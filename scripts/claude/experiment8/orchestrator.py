@@ -153,9 +153,9 @@ class Orchestrator:
             ]
         )
         
-        self.logger = logging.getLogger('Experiment6')
+        self.logger = logging.getLogger('Experiment8')
         self.logger.info("=" * 60)
-        self.logger.info("EXPERIMENT 6 - SYSTEM LOG INITIALIZED")
+        self.logger.info("EXPERIMENT 8 - SYSTEM LOG INITIALIZED")
         self.logger.info("=" * 60)
         print(f"📝 Logging to: {log_file}")
     

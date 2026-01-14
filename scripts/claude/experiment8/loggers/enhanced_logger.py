@@ -10,7 +10,7 @@ from datetime import datetime
 from typing import Dict, List, Any
 from config import BotConfig
 
-class GrowwLogger:
+class FlattradeLogger:
     """
     Per-Strategy Logger.
     Each strategy instance gets one of these to record its specific actions.

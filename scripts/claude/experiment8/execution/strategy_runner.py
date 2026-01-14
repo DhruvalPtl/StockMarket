@@ -33,7 +33,7 @@ from market_intelligence.bias_calculator import BiasCalculator, BiasState
 from market_intelligence.order_flow_tracker import OrderFlowTracker
 from market_intelligence.liquidity_mapper import LiquidityMapper
 from execution.risk_manager import RiskManager, Position
-from loggers.enhanced_logger import GrowwLogger
+from loggers.enhanced_logger import FlattradeLogger
 
 
 class StrategyRunner:
@@ -72,7 +72,7 @@ class StrategyRunner:
         self.timeframe = engine.timeframe
         
         # Per-strategy logger
-        self.logger = GrowwLogger(self.strategy_name, self.timeframe)
+        self.logger = FlattradeLogger(self.strategy_name, self.timeframe)
         
         # Position state
         self.active_position:  Optional[Dict] = None
