@@ -444,10 +444,6 @@ class StrategyRunner:
         
         pos = self.active_position
         
-        # Validate position strike hasn't changed
-        if pos['strike'] != pos['strike']:  # This will be caught by type system, but let's add explicit check
-            print(f"⚠️ CRITICAL: Position strike mismatch!")
-            
         # Get current price for the POSITION STRIKE (not ATM)
         current_price = self.engine.get_option_price(pos['strike'], pos['type'])
         
