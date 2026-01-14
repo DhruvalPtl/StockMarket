@@ -473,7 +473,7 @@ def run_test_mode():
 def main():
     """Main entry point."""
     # Parse arguments
-    parser = argparse.ArgumentParser(description='Experiment 6 Trading Bot')
+    parser = argparse.ArgumentParser(description='Experiment 8 Trading Bot')
     parser.add_argument('--test', action='store_true', help='Run in test mode')
     parser.add_argument('--no-confirm', action='store_true', help='Skip confirmation')
     args = parser.parse_args()

@@ -33,7 +33,7 @@ from market_intelligence.bias_calculator import BiasCalculator, BiasState
 from market_intelligence.order_flow_tracker import OrderFlowTracker
 from market_intelligence.liquidity_mapper import LiquidityMapper
 from execution.risk_manager import RiskManager, Position
-from loggers.enhanced_logger import GrowwLogger
+from loggers.enhanced_logger import FlattradeLogger
 
 
 class StrategyRunner:
@@ -72,7 +72,7 @@ class StrategyRunner:
         self.timeframe = engine.timeframe
         
         # Per-strategy logger
-        self.logger = GrowwLogger(self.strategy_name, self.timeframe)
+        self.logger = FlattradeLogger(self.strategy_name, self.timeframe)
         
         # Position state
         self.active_position:  Optional[Dict] = None
@@ -139,11 +139,16 @@ class StrategyRunner:
         
         # 9.Log tick (market snapshot) - log after signal generation
         signal_status = signal.signal_type.value if signal else "SCANNING"
+        
+        # Pass position strike if in trade to log the actual strike being monitored
+        position_strike = self.active_position['strike'] if self.active_position else None
+        
         self.logger.log_tick(
             engine=self.engine,
             signal=signal_status,
             daily_pnl=self.daily_pnl,
-            reason=signal.reason if signal else ""
+            reason=signal.reason if signal else "",
+            position_strike=position_strike
         )
         
         if signal:
@@ -366,8 +371,9 @@ class StrategyRunner:
         
         option_type = 'CE' if signal.signal_type == SignalType.BUY_CE else 'PE'
         
-        # Get strike
+        # Get strike - this may differ from ATM if the ATM strike is too expensive for our budget
         max_cost = self.config.Risk.CAPITAL_PER_STRATEGY * self.config.Risk.MAX_CAPITAL_USAGE_PCT * size_multiplier
+        current_atm = self.engine.atm_strike  # Store ATM at entry time
         strike_data = self.engine.get_affordable_strike(option_type, max_cost)
         
         if not strike_data: 
@@ -376,6 +382,11 @@ class StrategyRunner:
         
         entry_price = strike_data.ce_ltp if option_type == 'CE' else strike_data.pe_ltp
         strike = strike_data.strike
+        
+        # Warn if selected strike differs from ATM
+        if strike != current_atm:
+            strike_offset = strike - current_atm
+            print(f"ℹ️ [{self.strategy_name}] Selected {option_type} {strike} (ATM was {current_atm}, offset: {strike_offset:+d})")
         
         # Minimum ₹10 premium to prevent negative stop-loss prices
         if entry_price <= 10.0:
@@ -421,6 +432,7 @@ class StrategyRunner:
         self.strategy.mark_trade_executed()
         
         print(f"\n🚀 ENTRY [{self.strategy_name}]:  {option_type} {strike} @ ₹{entry_price:.2f}")
+        print(f"   ATM: {self.engine.atm_strike} | Active Strike: {strike} (Monitoring this strike)")
         print(f"   Target: ₹{self.target_price:.2f} | SL: ₹{self.stop_loss_price:.2f}")
         
         return True
@@ -432,8 +444,13 @@ class StrategyRunner:
         
         pos = self.active_position
         
-        # Get current price
+        # Get current price for THE position strike (not THE ATM)
         current_price = self.engine.get_option_price(pos['strike'], pos['type'])
+        
+        # Debug: Warn if ATM has drifted more than 100 points from position strike
+        if abs(self.engine.atm_strike - pos['strike']) > 100:
+            if self.tick_count % 20 == 0:  # Log every 20 ticks to avoid spam
+                print(f"ℹ️ [{self.strategy_name}] ATM={self.engine.atm_strike} but monitoring strike={pos['strike']}")
         
         if current_price <= 0.1:
             # Check how long we've been waiting
@@ -442,9 +459,13 @@ class StrategyRunner:
             
             if time_in_position > max_wait_seconds:
                 # Force exit at entry price (break-even)
-                print(f"⚠️ Strike missing for {time_in_position}s - Force exit")
+                print(f"⚠️ Strike {pos['strike']} missing for {time_in_position:.0f}s - Force exit")
                 self._exit_position(pos['entry_price'], "STRIKE_MISSING")
                 return
+            
+            # Warn about missing price data
+            if time_in_position > 10 and self.tick_count % 5 == 0:
+                print(f"⚠️ No price data for strike {pos['strike']} ({time_in_position:.0f}s in position)")
             
             return  # Don't act on zero price
         

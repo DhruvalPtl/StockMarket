@@ -332,7 +332,7 @@ class BotConfig:
     def print_config(cls):
         """Prints active configuration."""
         print("\n" + "="*60)
-        print("⚙️  EXPERIMENT 6 CONFIGURATION")
+        print("⚙️  EXPERIMENT 8 CONFIGURATION")
         print("="*60)
         print(f"Timeframes:      {cls.TIMEFRAMES}")
         print(f"Strategies:     {len(cls.STRATEGIES_TO_RUN)} active")
