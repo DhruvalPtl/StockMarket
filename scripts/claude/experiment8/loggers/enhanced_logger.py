@@ -39,7 +39,7 @@ class FlattradeLogger:
         if not os.path.exists(self.bot_log_file):
             cols = [
                 "Timestamp", "Strategy", "Timeframe", "Spot", "RSI", "VWAP", 
-                "ATM_Strike", "PCR", "Signal", "PnL", "Reason"
+                "ATM_Strike", "Active_Strike", "PCR", "Signal", "PnL", "Reason"
             ]
             self._write_csv(self.bot_log_file, cols, mode='w')
             
@@ -52,9 +52,20 @@ class FlattradeLogger:
             ]
             self._write_csv(self.trade_file, cols, mode='w')
 
-    def log_tick(self, engine, signal: str, daily_pnl: float, reason: str):
-        """Records the current market state and strategy status."""
+    def log_tick(self, engine, signal: str, daily_pnl: float, reason: str, position_strike: int = None):
+        """Records the current market state and strategy status.
+        
+        Args:
+            engine: DataEngine instance
+            signal: Current signal status (SCANNING, BUY_PE, etc.)
+            daily_pnl: Cumulative PnL for the day
+            reason: Signal reason or status message
+            position_strike: Active position strike if in a trade, None otherwise
+        """
         self.tick_count += 1
+        
+        # Use position strike if in trade, otherwise show ATM
+        active_strike = position_strike if position_strike is not None else engine.atm_strike
         
         row = [
             datetime.now().strftime("%H:%M:%S"),
@@ -64,6 +75,7 @@ class FlattradeLogger:
             int(engine.rsi),
             round(engine.vwap, 2),
             engine.atm_strike,
+            active_strike,  # Active strike being monitored/traded
             engine.pcr,
             signal or "SCANNING",
             round(daily_pnl, 2),
