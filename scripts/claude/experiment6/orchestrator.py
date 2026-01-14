@@ -216,7 +216,7 @@ class Orchestrator:
         stats = self.risk_manager.daily_stats
         win_rate = (stats.trades_won / stats.trades_taken * 100) if stats.trades_taken > 0 else 0
         
-        # Log the reset
+        # Log the reset 
         reset_msg = f"\n{'='*60}\n"
         reset_msg += f"🔄 AUTO-RESET #{self.reset_count} - MAX DAILY LOSS HIT\n"
         reset_msg += f"Previous Loss: ₹{abs(stats.net_pnl):.2f}\n"

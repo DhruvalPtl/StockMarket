@@ -1,4 +1,4 @@
-"""
+﻿"""
 DATA ENGINE - FLATTRADE API VERSION
 Enhanced data pipeline that feeds both raw data and Market Intelligence.
 
@@ -23,22 +23,37 @@ from datetime import datetime, timedelta
 from typing import Dict, List, Optional, Set, Tuple
 from collections import deque
 from dataclasses import dataclass
+from concurrent.futures import ThreadPoolExecutor, as_completed
 
 # Add parent to path
 sys.path.append(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
 # Add pythonAPI-main to path for Flattrade API
-flattrade_api_path = os.path.join(
-    os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__)))),
-    'pythonAPI-main'
-)
+current_file = os.path.abspath(__file__)
+claude_dir = os.path.dirname(os.path.dirname(os.path.dirname(current_file)))
+flattrade_api_path = os.path.join(claude_dir, 'pythonAPI-main')
+flattrade_dist_path = os.path.join(flattrade_api_path, 'dist')
+
+# Debug path resolution
+if not os.path.exists(flattrade_api_path):
+    print(f"⚠️ pythonAPI-main path not found: {flattrade_api_path}")
+    print(f"   Current file: {current_file}")
+    print(f"   Claude dir: {claude_dir}")
+    
+# Add both paths for Flattrade API
 sys.path.insert(0, flattrade_api_path)
+sys.path.insert(0, flattrade_dist_path)
 
 # Try importing Flattrade API
 try:
     from api_helper import NorenApiPy
-except ImportError:
-    print("❌ CRITICAL: 'api_helper' not found. Ensure pythonAPI-main is in the correct location")
+except ImportError as e:
+    print(f"❌ CRITICAL: 'api_helper' import failed: {e}")
+    print(f"   Flattrade API path: {flattrade_api_path}")
+    print(f"   Dist path: {flattrade_dist_path}")
+    print(f"   Path exists: {os.path.exists(flattrade_api_path)}")
+    if os.path.exists(flattrade_api_path):
+        print(f"   Contents: {os.listdir(flattrade_api_path)[:5]}")
     NorenApiPy = None
 
 from config import BotConfig, get_timeframe_display_name
@@ -192,6 +207,18 @@ class DataEngine:
         self.update_count:  int = 0
         self.warmup_complete: bool = False
         
+        # Performance timing
+        self.timing_stats: Dict[str, float] = {
+            'spot_fetch': 0.0,
+            'future_fetch': 0.0,
+            'option_fetch': 0.0,
+            'live_prices': 0.0,
+            'total_update': 0.0
+        }
+        
+        # Last full candle fetch time
+        self.last_candle_fetch: Optional[datetime] = None
+        
         # Connect
         self._connect()
         self._init_logging()
@@ -206,21 +233,23 @@ class DataEngine:
             print(f"[{self.timeframe}] 🔑 Connecting to Flattrade API...")
             self.api = NorenApiPy()
             
-            # Set session with user token
+            # Set session with user token (returns True on success)
             ret = self.api.set_session(
                 userid=self.user_id,
                 password='',
                 usertoken=self.user_token
             )
             
-            if ret and ret.get('stat') == 'Ok':
+            if ret:
                 self.is_connected = True
                 print(f"[{self.timeframe}] ✅ Connected to Flattrade API")
             else:
-                print(f"[{self.timeframe}] ❌ Connection Failed: {ret}")
+                print(f"[{self.timeframe}] ❌ Connection Failed: Session setup returned False")
                 self.is_connected = False
         except Exception as e:
             print(f"[{self.timeframe}] ❌ Connection Failed: {e}")
+            import traceback
+            traceback.print_exc()
             self.is_connected = False
     
     def _init_logging(self):
@@ -241,43 +270,6 @@ class DataEngine:
             print(f"⚠️ Logging init failed: {e}")
             self.log_file = None
     
-    def _get_token(self, exchange: str, symbol: str) -> Optional[str]:
-        """
-        Gets token for a symbol using searchscrip.
-        
-        Args:
-            exchange: Exchange name (e.g., 'NSE', 'NFO')
-            symbol: Trading symbol
-            
-        Returns:
-            Token string or None
-        """
-        cache_key = f"{exchange}|{symbol}"
-        if cache_key in self.token_cache:
-            return self.token_cache[cache_key]
-        
-        if not self.is_connected or not self.api:
-            return None
-        
-        try:
-            ret = self.api.searchscrip(exchange=exchange, searchtext=symbol)
-            if ret and ret.get('stat') == 'Ok' and ret.get('values'):
-                # Find exact match
-                for item in ret['values']:
-                    if item.get('tsym') == symbol:
-                        token = item.get('token')
-                        self.token_cache[cache_key] = token
-                        return token
-                # If no exact match, use first result
-                token = ret['values'][0].get('token')
-                self.token_cache[cache_key] = token
-                return token
-        except Exception as e:
-            if self.update_count % 10 == 0:
-                print(f"⚠️ Token fetch error for {symbol}: {e}")
-        
-        return None
-    
     # ==================== PUBLIC METHODS ====================
     
     def is_data_stale(self, max_age_seconds: int = 60) -> bool:
@@ -296,39 +288,153 @@ class DataEngine:
         age = (datetime.now() - self.timestamp).total_seconds()
         return age > max_age_seconds
     
-    def update(self) -> bool:
+    def get_live_prices(self) -> bool:
         """
-        Main update method. Fetches all data and calculates indicators.
+        FAST live price fetch using get_quotes (takes ~200-500ms).
+        Use this for quick price checks without full indicator calculation.
+        
+        Returns:
+            True if successful, False otherwise
+        """
+        if not self.is_connected:
+            return False
+        
+        live_start = time.time()
+        
+        try:
+            # Fetch spot, future, and ATM options in parallel
+            with ThreadPoolExecutor(max_workers=4) as executor:
+                futures = {}
+                
+                # Spot quote
+                futures['spot'] = executor.submit(
+                    self.api.get_quotes, 'NSE', '26000'
+                )
+                
+                # Future quote
+                fut_token = self._get_token('NFO', 'NIFTY27JAN26F')
+                if fut_token:
+                    futures['future'] = executor.submit(
+                        self.api.get_quotes, 'NFO', fut_token
+                    )
+                
+                # ATM options if we know the strike
+                if self.atm_strike > 0:
+                    expiry_dt = datetime.strptime(self.option_expiry, "%Y-%m-%d")
+                    expiry_str = expiry_dt.strftime('%d%b%y').upper()
+                    
+                    ce_symbol = f"NIFTY{expiry_str}C{self.atm_strike}"
+                    pe_symbol = f"NIFTY{expiry_str}P{self.atm_strike}"
+                    
+                    ce_token = self._get_token('NFO', ce_symbol)
+                    pe_token = self._get_token('NFO', pe_symbol)
+                    
+                    if ce_token:
+                        futures['ce'] = executor.submit(
+                            self.api.get_quotes, 'NFO', ce_token
+                        )
+                    if pe_token:
+                        futures['pe'] = executor.submit(
+                            self.api.get_quotes, 'NFO', pe_token
+                        )
+                
+                # Collect results
+                for key, future in futures.items():
+                    try:
+                        result = future.result(timeout=2.0)
+                        if result and result.get('stat') == 'Ok':
+                            lp = float(result.get('lp', 0))
+                            
+                            if key == 'spot':
+                                self.spot_ltp = lp
+                            elif key == 'future':
+                                self.fut_ltp = lp
+                            elif key == 'ce':
+                                self.atm_ce_ltp = lp
+                            elif key == 'pe':
+                                self.atm_pe_ltp = lp
+                    except Exception as e:
+                        if self.update_count % 10 == 0:
+                            print(f"⚠️ Live price fetch error ({key}): {e}")
+            
+            # Update ATM strike from spot
+            if self.spot_ltp > 0:
+                self.atm_strike = round(self.spot_ltp / 50) * 50
+            
+            self.timing_stats['live_prices'] = time.time() - live_start
+            self.timestamp = datetime.now()
+            
+            return True
+            
+        except Exception as e:
+            print(f"❌ Live price fetch failed: {e}")
+            return False
+    
+    def update(self, full_fetch: bool = False) -> bool:
+        """
+        Main update method. Uses hybrid approach:
+        - Live quotes for LTP (fast, every update)
+        - Historical candles for indicators (slower, every 5 mins or when full_fetch=True)
+        
+        Args:
+            full_fetch: Force full historical candle fetch
         
         Returns: 
             True if update successful, False otherwise
         """
         self.update_count += 1
         update_start_time = datetime.now()
+        total_start = time.time()
         
         try:
-            # 1.Fetch Spot data (for RSI, EMA)
-            self._rate_limit('spot')
-            self._fetch_spot_data()
+            # Determine if we need full candle fetch
+            need_candles = (full_fetch or 
+                          self.last_candle_fetch is None or 
+                          (datetime.now() - self.last_candle_fetch).total_seconds() > 300 or
+                          self.update_count <= 1)
             
-            # 2.Fetch Future data (for VWAP, patterns)
-            self._rate_limit('future')
-            self._fetch_future_data()
+            if need_candles:
+                # FULL FETCH MODE (takes ~60s)
+                print(f"   [{self.timeframe}] Full candle fetch...")
+                
+                # 1.Fetch Spot data (for RSI, EMA)
+                self._rate_limit('spot')
+                spot_start = time.time()
+                self._fetch_spot_data()
+                self.timing_stats['spot_fetch'] = time.time() - spot_start
+                
+                # 2.Fetch Future data (for VWAP, patterns)
+                self._rate_limit('future')
+                fut_start = time.time()
+                self._fetch_future_data()
+                self.timing_stats['future_fetch'] = time.time() - fut_start
+                
+                self.last_candle_fetch = datetime.now()
+            else:
+                # FAST MODE - Just get live prices (takes <1s)
+                live_start = time.time()
+                self.get_live_prices()
+                self.timing_stats['live_prices'] = time.time() - live_start
             
             # 3.Calculate ATM strike
             if self.spot_ltp > 0:
                 self.atm_strike = round(self.spot_ltp / 50) * 50
             
-            # 4.Fetch Option chain
+            # 4.Fetch Option chain (now parallel!)
             if self.atm_strike > 0:
                 self._rate_limit('chain')
+                opt_start = time.time()
                 self._fetch_option_chain()
+                self.timing_stats['option_fetch'] = time.time() - opt_start
             
             # 5.Update opening range
             self._update_opening_range()
             
             # 6.Log snapshot
             self._log_snapshot()
+            
+            # Record total time
+            self.timing_stats['total_update'] = time.time() - total_start
             
             # Warmup check
             if self.update_count >= 15:
@@ -436,64 +542,231 @@ class DataEngine:
         count_below = sum(1 for iv in sorted_iv if iv < current_iv)
         return (count_below / len(sorted_iv)) * 100
     
+    def print_live_status(self, show_options: bool = True):
+        """Prints live market status in clean terminal format."""
+        if not self.timestamp:
+            return
+        
+        # Calculate changes
+        fut_premium = self.fut_ltp - self.spot_ltp if self.spot_ltp > 0 else 0
+        premium_pct = (fut_premium / self.spot_ltp * 100) if self.spot_ltp > 0 else 0
+        
+        # Price movement indicator
+        spot_trend = "🟢" if self.is_green_candle else "🔴"
+        
+        # RSI zones
+        if self.rsi >= 70:
+            rsi_zone = "🔴 OVERBOUGHT"
+        elif self.rsi <= 30:
+            rsi_zone = "🟢 OVERSOLD"
+        else:
+            rsi_zone = "⚪ NEUTRAL"
+        
+        # ADX trend strength
+        if self.adx >= 35:
+            adx_strength = "STRONG"
+        elif self.adx >= 20:
+            adx_strength = "MODERATE"
+        else:
+            adx_strength = "WEAK"
+        
+        # Build output
+        print(f"\n{'='*75}")
+        print(f"⏰ {self.timestamp.strftime('%H:%M:%S')} | {self.timeframe.upper()} | Update #{self.update_count}")
+        print(f"{'='*75}")
+        
+        # Spot & Future with visual separator
+        print(f"\n  SPOT    {spot_trend} ₹{self.spot_ltp:>9,.2f}  |  O:{self.fut_open:>8,.2f} H:{self.fut_high:>8,.2f}")
+        print(f"  FUTURE     ₹{self.fut_ltp:>9,.2f}  |  L:{self.fut_low:>8,.2f} C:{self.fut_close:>8,.2f}")
+        print(f"  PREMIUM    ₹{fut_premium:>9.2f} ({premium_pct:>+6.2f}%) | ATM: {self.atm_strike}")
+        
+        # Indicators in compact format
+        print(f"\n  {'─'*71}")
+        print(f"  RSI: {self.rsi:>5.1f} {rsi_zone:>15} | ADX: {self.adx:>5.1f} ({adx_strength})")
+        print(f"  ATR: {self.atr:>5.1f}              | VWAP: ₹{self.vwap:>9,.2f}")
+        print(f"  PCR: {self.pcr:>5.2f} (PE/CE OI)   | VOL: {self.volume_relative:>5.2f}x avg")
+        
+        # Options - compact view
+        if show_options and self.strikes_data:
+            print(f"\n  {'─'*71}")
+            print(f"  {'STRIKE':^10} │ {'CALL (CE)':^28} │ {'PUT (PE)':^28}")
+            print(f"  {'':<10} │ {'Price':>8} {'OI':>10} {'Chg':>8} │ {'Price':>8} {'OI':>10} {'Chg':>8}")
+            print(f"  {'─'*71}")
+            
+            # Show 5 strikes around ATM
+            strikes_to_show = sorted([
+                s for s in self.strikes_data.keys()
+                if abs(s - self.atm_strike) <= 100
+            ])[:5]
+            
+            for strike in strikes_to_show:
+                data = self.strikes_data[strike]
+                atm_mark = "⭐" if strike == self.atm_strike else "  "
+                
+                ce_oi_chg = f"{data.ce_oi_change/1000:>+7.0f}K" if data.ce_oi_change != 0 else "    --"
+                pe_oi_chg = f"{data.pe_oi_change/1000:>+7.0f}K" if data.pe_oi_change != 0 else "    --"
+                
+                print(f"  {atm_mark}{strike:<8} │ ₹{data.ce_ltp:>7.2f} {data.ce_oi/1000:>8.0f}K {ce_oi_chg:>8} │ ₹{data.pe_ltp:>7.2f} {data.pe_oi/1000:>8.0f}K {pe_oi_chg:>8}")
+            
+            print(f"  {'─'*71}")
+            print(f"  TOTAL OI:  CE: {self.total_ce_oi/1000000:>7.2f}M  |  PE: {self.total_pe_oi/1000000:>7.2f}M  |  PCR: {self.pcr:.2f}")
+        
+        # Timing stats
+        if self.timing_stats.get('total_update', 0) > 0:
+            spot_ms = self.timing_stats.get('spot_fetch', 0) * 1000
+            fut_ms = self.timing_stats.get('future_fetch', 0) * 1000
+            opt_ms = self.timing_stats.get('option_fetch', 0) * 1000
+            live_ms = self.timing_stats.get('live_prices', 0) * 1000
+            total_ms = self.timing_stats.get('total_update', 0) * 1000
+            
+            print(f"\n  ⏱️  Update: {total_ms:>6.0f}ms", end="")
+            if live_ms > 0:
+                print(f" (Live: {live_ms:.0f}ms + Opt: {opt_ms:.0f}ms)", end="")
+            else:
+                print(f" (Spot: {spot_ms:.0f}ms + Fut: {fut_ms:.0f}ms + Opt: {opt_ms:.0f}ms)", end="")
+            print()
+        
+        print(f"{'='*75}\n")
+    
     # ==================== INTERNAL FETCHERS ====================
     
+    def _get_token(self, exchange: str, symbol: str) -> Optional[str]:
+        """Gets exchange token for a symbol using search."""
+        # Check cache first
+        cache_key = f"{exchange}:{symbol}"
+        if cache_key in self.token_cache:
+            return self.token_cache[cache_key]
+        
+        try:
+            # Search for symbol
+            result = self.api.searchscrip(exchange=exchange, searchtext=symbol)
+            
+            if not result or 'values' not in result:
+                print(f"⚠️ [{self.timeframe}] Token search failed for {exchange}:{symbol}")
+                return None
+            
+            # Find exact match
+            for item in result['values']:
+                if item.get('tsym') == symbol:
+                    token = item.get('token')
+                    if token:
+                        self.token_cache[cache_key] = token
+                        return token
+            
+            # If no exact match, take first result
+            if len(result['values']) > 0:
+                token = result['values'][0].get('token')
+                if token:
+                    self.token_cache[cache_key] = token
+                    print(f"️ [{self.timeframe}] Using fuzzy match for {symbol}: {result['values'][0].get('tsym')}")
+                    return token
+            
+            print(f"⚠️ [{self.timeframe}] No token found for {exchange}:{symbol}")
+            return None
+            
+        except Exception as e:
+            print(f"❌ [{self.timeframe}] Token lookup error for {symbol}: {e}")
+            return None
+    
     def _fetch_spot_data(self):
-        """Fetches spot index candles."""
+        """Fetches spot index candles using Flattrade API."""
         if not self.is_connected:
             print(f"⚠️ [{self.timeframe}] Not connected to API - cannot fetch spot data")
             return
         
         try:
-            start_dt = datetime.now() - timedelta(days=5)
-            end_dt = datetime.now()
+            # Get token for NIFTY 50 index - use exact symbol name
+            # Token is 26000 for "Nifty 50" index
+            token = '26000'  # Hardcoded for performance, or use: self._get_token('NSE', 'Nifty 50')
+            if not token:
+                print(f"⚠️ [{self.timeframe}] Could not get token for NIFTY index")
+                return
             
-            resp = self.groww.get_historical_candles(
-                "NSE", "CASH", "NSE-NIFTY",
-                start_dt.strftime("%Y-%m-%d %H:%M:%S"),
-                end_dt.strftime("%Y-%m-%d %H:%M:%S"),
-                self.timeframe
+            # Get current quote for LTP
+            quote = self.api.get_quotes(exchange='NSE', token=token)
+            if quote and quote.get('stat') == 'Ok':
+                self.spot_ltp = float(quote.get('lp', 0))
+            
+            # Get historical candles
+            interval = self.timeframe_map.get(self.timeframe, '1')
+            start_dt = datetime.now() - timedelta(days=5)
+            start_time = int(time.mktime(start_dt.timetuple()))
+            
+            resp = self.api.get_time_price_series(
+                exchange='NSE',
+                token=token,
+                starttime=start_time,
+                interval=interval
             )
             
-            if not resp:
-                print(f"⚠️ [{self.timeframe}] Spot API returned None")
+            if not resp or not isinstance(resp, list):
+                print(f"⚠️ [{self.timeframe}] Spot API returned no data: {type(resp)}")
+                if resp:
+                    print(f"   Response: {resp}")
                 return
             
-            if 'candles' not in resp:
-                print(f"⚠️ [{self.timeframe}] Spot API response missing 'candles' key: {resp}")
+            if len(resp) == 0:
+                if self.update_count % 10 == 0:
+                    print(f"⚠️ [{self.timeframe}] Spot API returned empty candles")
                 return
             
-            if len(resp['candles']) == 0:
-                print(f"⚠️ [{self.timeframe}] Spot API returned empty candles")
+            # Convert to DataFrame - Flattrade returns list of dicts with named fields
+            df = pd.DataFrame(resp)
+            
+            # Flattrade time series format: 'time', 'into' (open), 'inth' (high), 'intl' (low), 'intc' (close), 'v', 'oi'
+            # Rename columns to our standard format
+            column_mapping = {
+                'time': 'time',
+                'into': 'o',
+                'inth': 'h', 
+                'intl': 'l',
+                'intc': 'c',
+                'v': 'v',
+                'oi': 'oi'
+            }
+            
+            # Rename columns that exist
+            df = df.rename(columns={k: v for k, v in column_mapping.items() if k in df.columns})
+            
+            # Convert numeric columns
+            for col in ['o', 'h', 'l', 'c', 'v']:
+                if col in df.columns:
+                    df[col] = pd.to_numeric(df[col], errors='coerce')
+            
+            # Remove invalid rows  
+            df = df.dropna(subset=['o', 'h', 'l', 'c'])
+            
+            if len(df) == 0:
+                if self.update_count % 10 == 0:
+                    print(f"⚠️ [{self.timeframe}] No valid spot data after filtering")
                 return
             
-            df = pd.DataFrame(resp['candles'])
-            # Handle variable column counts from API
-            expected_cols = ['t', 'o', 'h', 'l', 'c', 'v']
-            if len(df.columns) <= len(expected_cols):
-                df.columns = expected_cols[:len(df.columns)]
-            else:
-                # API returned extra columns, use first 6
-                df = df.iloc[:, :6]
-                df.columns = expected_cols
-            
-            # Update LTP
-            self.spot_ltp = float(df['c'].iloc[-1])
+            # Update LTP from last candle
+            if self.spot_ltp == 0:
+                self.spot_ltp = float(df['c'].iloc[-1])
             
             # Store candles
             for _, row in df.tail(50).iterrows():
-                candle = CandleData(
-                    timestamp=pd.to_datetime(row['t']),
-                    open=float(row['o']),
-                    high=float(row['h']),
-                    low=float(row['l']),
-                    close=float(row['c']),
-                    volume=float(row['v']) if pd.notna(row.get('v')) else 0.0
-                )
-                self.candles.append(candle)
+                try:
+                    # Convert timestamp - could be int or string
+                    if isinstance(row['time'], str):
+                        ts = pd.to_datetime(row['time']).timestamp()
+                    else:
+                        ts = int(row['time'])
+                    
+                    candle = CandleData(
+                        timestamp=datetime.fromtimestamp(ts),
+                        open=float(row['o']),
+                        high=float(row['h']),
+                        low=float(row['l']),
+                        close=float(row['c']),
+                        volume=float(row['v']) if pd.notna(row.get('v')) else 0.0
+                    )
+                    self.candles.append(candle)
+                except (ValueError, TypeError) as e:
+                    continue  # Skip invalid rows
             
             # Calculate price-based indicators from SPOT data
-            # (We trade based on SPOT price movements)
             self._calculate_indicators(df)
             
         except Exception as e:
@@ -502,50 +775,90 @@ class DataEngine:
             traceback.print_exc()
     
     def _fetch_future_data(self):
-        """Fetches futures candles."""
+        """Fetches futures candles using Flattrade API."""
         if not self.is_connected:
             print(f"⚠️ [{self.timeframe}] Not connected to API - cannot fetch future data")
             return
         
-        try:# Use last 5 days for historical data
-            start_dt = datetime.now() - timedelta(days=5)
-            end_dt = datetime.now()
+        try:
+            # Get token for future - Flattrade format: NIFTYXXMMMYYF (ends with F not FUT!)
+            # Extract from fut_symbol: "NSE-NIFTY-27Jan26-FUT" -> "NIFTY27JAN26F"
+            expiry_dt = datetime.strptime(self.future_expiry, "%Y-%m-%d")
+            fut_search = f"NIFTY{expiry_dt.strftime('%d%b%y').upper()}F"
+            token = self._get_token('NFO', fut_search)
             
-            resp = self.groww.get_historical_candles(
-                "NSE", "FNO", self.fut_symbol,
-                start_dt.strftime("%Y-%m-%d %H:%M:%S"),
-                end_dt.strftime("%Y-%m-%d %H:%M:%S"),
-                self.timeframe
+            if not token:
+                # Try generic NIFTY search and filter
+                print(f"⚠️ [{self.timeframe}] Trying generic NIFTY futures search")
+                token = self._get_token('NFO', 'NIFTY')
+            
+            if not token:
+                print(f"⚠️ [{self.timeframe}] Could not get token for future {fut_search}")
+                return
+            
+            # Get current quote for LTP
+            quote = self.api.get_quotes(exchange='NFO', token=token)
+            if quote and quote.get('stat') == 'Ok':
+                self.fut_ltp = float(quote.get('lp', 0))
+                self.fut_open = float(quote.get('o', 0))
+                self.fut_high = float(quote.get('h', 0))
+                self.fut_low = float(quote.get('l', 0))
+                self.fut_close = float(quote.get('c', self.fut_ltp))
+            
+            # Get historical candles
+            interval = self.timeframe_map.get(self.timeframe, '1')
+            start_dt = datetime.now() - timedelta(days=5)
+            start_time = int(time.mktime(start_dt.timetuple()))
+            
+            resp = self.api.get_time_price_series(
+                exchange='NFO',
+                token=token,
+                starttime=start_time,
+                interval=interval
             )
             
-            if not resp:
-                print(f"⚠️ [{self.timeframe}] Future API returned None for {self.fut_symbol}")
+            if not resp or not isinstance(resp, list) or len(resp) == 0:
+                print(f"⚠️ [{self.timeframe}] Future API returned no data for {fut_search}")
                 return
             
-            if 'candles' not in resp:
-                print(f"⚠️ [{self.timeframe}] Future API response missing 'candles' key: {resp}")
-                return
+            # Convert to DataFrame - Flattrade returns list of dicts with named fields
+            df = pd.DataFrame(resp)
             
-            if len(resp['candles']) == 0:
-                print(f"⚠️ [{self.timeframe}] Future API returned empty candles for {self.fut_symbol}")
-                return
+            # Flattrade time series format: 'time', 'into' (open), 'inth' (high), 'intl' (low), 'intc' (close), 'v', 'oi'
+            # Rename columns to our standard format
+            column_mapping = {
+                'time': 'time',
+                'into': 'o',
+                'inth': 'h',
+                'intl': 'l',
+                'intc': 'c',
+                'v': 'v',
+                'oi': 'oi'
+            }
             
-            df = pd.DataFrame(resp['candles'])
-            # Handle variable column counts from API
-            expected_cols = ['t', 'o', 'h', 'l', 'c', 'v']
-            if len(df.columns) <= len(expected_cols):
-                df.columns = expected_cols[:len(df.columns)]
-            else:
-                # API returned extra columns, use first 6
-                df = df.iloc[:, :6]
-                df.columns = expected_cols
+            # Rename columns that exist
+            df = df.rename(columns={k: v for k, v in column_mapping.items() if k in df.columns})
+            
+            # Convert numeric columns
+            for col in ['o', 'h', 'l', 'c', 'v']:
+                if col in df.columns:
+                    df[col] = pd.to_numeric(df[col], errors='coerce')
+            
+            # Remove invalid rows
+            df = df.dropna(subset=['o', 'h', 'l', 'c'])
+            
+            if len(df) == 0:
+                print(f"⚠️ [{self.timeframe}] No valid candle data after filtering (market may be closed)")
+                print(f"   This means all numeric values were NaN after conversion")
+                return
             
             last_row = df.iloc[-1]
-            self.fut_ltp = float(last_row['c'])
-            self.fut_open = float(last_row['o'])
-            self.fut_high = float(last_row['h'])
-            self.fut_low = float(last_row['l'])
-            self.fut_close = float(last_row['c'])
+            if self.fut_ltp == 0:
+                self.fut_ltp = float(last_row['c'])
+                self.fut_open = float(last_row['o'])
+                self.fut_high = float(last_row['h'])
+                self.fut_low = float(last_row['l'])
+                self.fut_close = float(last_row['c'])
             
             # Volume
             if 'v' in df.columns:
@@ -561,7 +874,6 @@ class DataEngine:
             self.is_green_candle = self.fut_close > self.fut_open
             
             # Calculate VWAP from FUTURE data
-            # (NIFTY index has no volume - must use future volume)
             self._calculate_vwap(df)
             
         except Exception as e:
@@ -572,18 +884,21 @@ class DataEngine:
                 print(f"⚠️ Future fetch error: {e}")
     
     def _fetch_option_chain(self):
-        """Fetches option chain data."""
+        """Fetches option chain data using Flattrade API."""
         if not self.is_connected:
             print(f"⚠️ [{self.timeframe}] Not connected to API - cannot fetch option chain")
             return
         
         try:
-            chain = self.groww.get_option_chain("NSE", "NIFTY", self.option_expiry)
+            if self.atm_strike == 0:
+                return  # Need ATM first
             
-            if not chain or 'strikes' not in chain: 
-                return
+            # Flattrade: Need to construct individual option symbols
+            # Format: NIFTY13JAN26C24000 (NIFTY + DD + MMM + YY + C/P + STRIKE)
+            expiry_dt = datetime.strptime(self.option_expiry, "%Y-%m-%d")
+            expiry_str = expiry_dt.strftime('%d%b%y').upper()  # e.g., 13JAN26
             
-            # Strikes to fetch
+            # Strikes to monitor
             strikes_to_fetch = {
                 self.atm_strike,
                 self.atm_strike + 50, self.atm_strike + 100, self.atm_strike + 150,
@@ -591,67 +906,107 @@ class DataEngine:
             }
             strikes_to_fetch.update(self.active_monitoring_strikes)
             
-            # Process chain
-            new_strikes_data:  Dict[int, StrikeOIData] = {}
+            # Fetch each strike in parallel (much faster!)
+            new_strikes_data: Dict[int, StrikeOIData] = {}
             total_ce_oi = 0
             total_pe_oi = 0
             
-            for strike_str, data in chain['strikes'].items():
-                strike = int(float(strike_str))
+            # Prepare all symbols first
+            strike_symbols = {}
+            for strike in strikes_to_fetch:
+                ce_symbol = f"NIFTY{expiry_str}C{strike}"
+                pe_symbol = f"NIFTY{expiry_str}P{strike}"
+                ce_token = self._get_token('NFO', ce_symbol)
+                pe_token = self._get_token('NFO', pe_symbol)
                 
-                ce = data.get('CE', {})
-                pe = data.get('PE', {})
+                if ce_token and pe_token:
+                    strike_symbols[strike] = {
+                        'ce_token': ce_token,
+                        'pe_token': pe_token
+                    }
+            
+            # Fetch all quotes in parallel
+            with ThreadPoolExecutor(max_workers=10) as executor:
+                futures = {}
                 
-                ce_oi = ce.get('open_interest', 0)
-                pe_oi = pe.get('open_interest', 0)
-                
-                total_ce_oi += ce_oi
-                total_pe_oi += pe_oi
-                
-                if strike in strikes_to_fetch:
-                    # Calculate OI change
-                    ce_oi_change = ce_oi - self.prev_ce_oi.get(strike, ce_oi)
-                    pe_oi_change = pe_oi - self.prev_pe_oi.get(strike, pe_oi)
-                    
-                    # Get greeks
-                    ce_greeks = ce.get('greeks', {})
-                    pe_greeks = pe.get('greeks', {})
-                    
-                    new_strikes_data[strike] = StrikeOIData(
-                        strike=strike,
-                        ce_oi=ce_oi,
-                        pe_oi=pe_oi,
-                        ce_oi_change=ce_oi_change,
-                        pe_oi_change=pe_oi_change,
-                        ce_ltp=ce.get('ltp', 0.0),
-                        pe_ltp=pe.get('ltp', 0.0),
-                        ce_iv=ce_greeks.get('iv', 0.0),
-                        pe_iv=pe_greeks.get('iv', 0.0),
-                        ce_delta=ce_greeks.get('delta', 0.0),
-                        pe_delta=pe_greeks.get('delta', 0.0)
+                for strike, tokens in strike_symbols.items():
+                    futures[f'ce_{strike}'] = executor.submit(
+                        self.api.get_quotes, 'NFO', tokens['ce_token']
                     )
+                    futures[f'pe_{strike}'] = executor.submit(
+                        self.api.get_quotes, 'NFO', tokens['pe_token']
+                    )
+                
+                # Collect results
+                quotes = {}
+                for key, future in futures.items():
+                    try:
+                        result = future.result(timeout=3.0)
+                        if result and result.get('stat') == 'Ok':
+                            quotes[key] = result
+                    except Exception as e:
+                        if self.update_count % 10 == 0:
+                            print(f"⚠️ Quote fetch timeout: {key}")
+            
+            # Process collected quotes
+            for strike in strike_symbols.keys():
+                ce_key = f'ce_{strike}'
+                pe_key = f'pe_{strike}'
+                
+                if ce_key not in quotes or pe_key not in quotes:
+                    continue
+                
+                try:
+                    # Extract CE data
+                    ce_quote = quotes[ce_key]
+                    ce_oi = int(ce_quote.get('oi', 0))
+                    ce_ltp = float(ce_quote.get('lp', 0))
                     
-                    # Update previous OI
+                    # Extract PE data
+                    pe_quote = quotes[pe_key]
+                    pe_oi = int(pe_quote.get('oi', 0))
+                    pe_ltp = float(pe_quote.get('lp', 0))
+                    
+                    # Create strike data
+                    strike_data = StrikeOIData(strike=strike)
+                    
+                    # CE data
+                    strike_data.ce_oi = ce_oi
+                    strike_data.ce_ltp = ce_ltp
+                    strike_data.ce_oi_change = ce_oi - self.prev_ce_oi.get(strike, ce_oi)
                     self.prev_ce_oi[strike] = ce_oi
+                    total_ce_oi += ce_oi
+                    
+                    # PE data
+                    strike_data.pe_oi = pe_oi
+                    strike_data.pe_ltp = pe_ltp
+                    strike_data.pe_oi_change = pe_oi - self.prev_pe_oi.get(strike, pe_oi)
                     self.prev_pe_oi[strike] = pe_oi
+                    total_pe_oi += pe_oi
+                    
+                    new_strikes_data[strike] = strike_data
+                    
+                except Exception as e:
+                    if self.update_count % 10 == 0:
+                        print(f"⚠️ Strike {strike} process error: {e}")
+                    continue
             
             # Commit updates
-            self.strikes_data = new_strikes_data
-            self.total_ce_oi = total_ce_oi
-            self.total_pe_oi = total_pe_oi
-            self.pcr = total_pe_oi / total_ce_oi if total_ce_oi > 0 else 1.0
-            
-            # ATM data
-            if self.atm_strike in self.strikes_data:
-                atm_data = self.strikes_data[self.atm_strike]
-                self.atm_ce_ltp = atm_data.ce_ltp
-                self.atm_pe_ltp = atm_data.pe_ltp
-                self.atm_iv = (atm_data.ce_iv + atm_data.pe_iv) / 2
+            if new_strikes_data:
+                self.strikes_data = new_strikes_data
+                self.total_ce_oi = total_ce_oi if total_ce_oi > 0 else self.total_ce_oi
+                self.total_pe_oi = total_pe_oi if total_pe_oi > 0 else self.total_pe_oi
+                self.pcr = total_pe_oi / total_ce_oi if total_ce_oi > 0 else 1.0
                 
-                if self.atm_iv > 0:
-                    self.iv_history.append(self.atm_iv)
+                # ATM data
+                if self.atm_strike in self.strikes_data:
+                    atm_data = self.strikes_data[self.atm_strike]
+                    self.atm_ce_ltp = atm_data.ce_ltp
+                    self.atm_pe_ltp = atm_data.pe_ltp
+                    # Note: Flattrade doesn't provide IV in basic quotes, set to 0
+                    self.atm_iv = 0.0
             
-        except Exception as e: 
+        except Exception as e:
             if self.update_count % 10 == 0:
                 print(f"⚠️ Chain fetch error: {e}")
     

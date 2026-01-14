@@ -562,7 +562,7 @@ class StrategyRunner:
         """Returns strategy performance summary."""
         wins = sum(1 for t in self.trades_today if t['PnL'] > 0)
         losses = len(self.trades_today) - wins
-        
+         
         return {
             'strategy':  self.strategy_name,
             'timeframe': self.timeframe,

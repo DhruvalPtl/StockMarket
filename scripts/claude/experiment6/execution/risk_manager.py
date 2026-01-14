@@ -308,7 +308,7 @@ class RiskManager:
         Adjusts position size based on volatility.
         Higher ATR = smaller position.
         """
-        # Baseline ATR (normal conditions)
+        # Baseline ATR (normal conditions) 
         baseline_atr = 50
                 # Prevent division by zero
         if baseline_atr <= 0 or atr <= 0:

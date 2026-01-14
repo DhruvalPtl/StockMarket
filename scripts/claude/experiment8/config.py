@@ -20,10 +20,10 @@ class BotConfig:
     # 1. FLATTRADE API CREDENTIALS & CONNECTION
     # ============================================================
     # User session token (generated via Flattrade login flow)
-    USER_TOKEN = "your_session_token_here"
+    USER_TOKEN = "33844c1ea0d4756385a3474b6f0534201e094a535fe1f5e1eba9aaf0f714575a"
     
     # User ID from Flattrade account
-    USER_ID = "your_user_id_here"
+    USER_ID = "FZ31397"
     
     # Rate Limiting (Seconds between calls)
     RATE_LIMIT_SPOT = 0.5
@@ -298,10 +298,10 @@ class BotConfig:
         errors = []
         
         # Credentials
-        if not cls.API_KEY or len(cls.API_KEY) < 10:
-            errors.append("API_KEY is missing or invalid.")
-        if not cls.API_SECRET:
-            errors.append("API_SECRET is missing.")
+        if not cls.USER_TOKEN or len(cls.USER_TOKEN) < 10:
+            errors.append("USER_TOKEN is missing or invalid.")
+        if not cls.USER_ID:
+            errors.append("USER_ID is missing.")
 
         # Dates
         try:
@@ -320,12 +320,12 @@ class BotConfig:
                 errors.append(f"Unknown strategy: {strat}")
 
         if errors:
-            print("\n❌ CONFIG VALIDATION FAILED:")
+            print("\n[ERROR] CONFIG VALIDATION FAILED:")
             for e in errors:
                 print(f"  - {e}")
             raise ValueError("Configuration invalid")
             
-        print("✅ Configuration validated.")
+        print("[PASS] Configuration validated.")
         return True
 
     @classmethod

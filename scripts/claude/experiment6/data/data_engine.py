@@ -421,7 +421,7 @@ class DataEngine:
             
             # Calculate price-based indicators from SPOT data
             # (We trade based on SPOT price movements)
-            self._calculate_indicators(df)
+            self._calculate_indicators(df) 
             
         except Exception as e:
             print(f"❌ [{self.timeframe}] Spot fetch error: {e}")

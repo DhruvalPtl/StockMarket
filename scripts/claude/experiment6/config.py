@@ -250,7 +250,7 @@ class BotConfig:
         MOMENTUM_BULL_HIGH = 75
         MOMENTUM_BEAR_LOW = 25
         MOMENTUM_BEAR_HIGH = 45
-        
+         
     # ============================================================
     # 14.PATTERN SETTINGS
     # ============================================================

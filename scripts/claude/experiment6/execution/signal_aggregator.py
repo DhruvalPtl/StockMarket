@@ -7,7 +7,7 @@ Key Functions:
 2.Calculates confluence score (how many strategies agree)
 3.Filters weak signals
 4.Prevents conflicting trades (CE and PE at same time)
-5.Prioritizes best signals when multiple exist
+5.Prioritizes best signals when multiple exist 
 
 This is the "voting system" where strategies vote on direction.
 """
