@@ -1,12 +1,7 @@
 
 
 # CSV files
-*.csv
 
-# Log directories - prevent test logs from being committed
-log/
-log1/
-D:\\*/
 
 # Python cache
 __pycache__/

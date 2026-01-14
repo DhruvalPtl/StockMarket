@@ -10,11 +10,10 @@ from datetime import datetime
 from typing import Dict, List, Any
 from config import BotConfig
 
-class FlattradeLogger:
+class GrowwLogger:
     """
-    Per-Strategy Logger for Flattrade API Trading System.
-    Each strategy instance gets one of these to record its specific actions,
-    trades, and performance metrics to CSV files.
+    Per-Strategy Logger.
+    Each strategy instance gets one of these to record its specific actions.
     """
     
     def __init__(self, strategy_name: str, timeframe: str):
@@ -39,7 +38,7 @@ class FlattradeLogger:
         if not os.path.exists(self.bot_log_file):
             cols = [
                 "Timestamp", "Strategy", "Timeframe", "Spot", "RSI", "VWAP", 
-                "ATM_Strike", "Active_Strike", "PCR", "Signal", "PnL", "Reason"
+                "ATM_Strike", "PCR", "Signal", "PnL", "Reason"
             ]
             self._write_csv(self.bot_log_file, cols, mode='w')
             
@@ -52,20 +51,9 @@ class FlattradeLogger:
             ]
             self._write_csv(self.trade_file, cols, mode='w')
 
-    def log_tick(self, engine, signal: str, daily_pnl: float, reason: str, position_strike: int = None):
-        """Records the current market state and strategy status.
-        
-        Args:
-            engine: DataEngine instance
-            signal: Current signal status (SCANNING, BUY_PE, etc.)
-            daily_pnl: Cumulative PnL for the day
-            reason: Signal reason or status message
-            position_strike: Active position strike if in a trade, None otherwise
-        """
+    def log_tick(self, engine, signal: str, daily_pnl: float, reason: str):
+        """Records the current market state and strategy status."""
         self.tick_count += 1
-        
-        # Use position strike if in trade, otherwise show ATM
-        active_strike = position_strike if position_strike is not None else engine.atm_strike
         
         row = [
             datetime.now().strftime("%H:%M:%S"),
@@ -75,7 +63,6 @@ class FlattradeLogger:
             int(engine.rsi),
             round(engine.vwap, 2),
             engine.atm_strike,
-            active_strike,  # Active strike being monitored/traded
             engine.pcr,
             signal or "SCANNING",
             round(daily_pnl, 2),
