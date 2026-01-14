@@ -1,10 +1,7 @@
-# Log directories
-log/
-logs/
-*.log
+
 
 # CSV files
-*.csv
+
 
 # Python cache
 __pycache__/
