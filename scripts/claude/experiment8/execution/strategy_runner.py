@@ -371,7 +371,7 @@ class StrategyRunner:
         
         option_type = 'CE' if signal.signal_type == SignalType.BUY_CE else 'PE'
         
-        # Get strike - this may differ from ATM if ATM is too expensive
+        # Get strike - this may differ from ATM if the ATM strike is too expensive for our budget
         max_cost = self.config.Risk.CAPITAL_PER_STRATEGY * self.config.Risk.MAX_CAPITAL_USAGE_PCT * size_multiplier
         current_atm = self.engine.atm_strike  # Store ATM at entry time
         strike_data = self.engine.get_affordable_strike(option_type, max_cost)
@@ -444,10 +444,10 @@ class StrategyRunner:
         
         pos = self.active_position
         
-        # Get current price for the POSITION STRIKE (not ATM)
+        # Get current price for THE position strike (not THE ATM)
         current_price = self.engine.get_option_price(pos['strike'], pos['type'])
         
-        # Debug: Warn if ATM has drifted far from position strike
+        # Debug: Warn if ATM has drifted more than 100 points from position strike
         if abs(self.engine.atm_strike - pos['strike']) > 100:
             if self.tick_count % 20 == 0:  # Log every 20 ticks to avoid spam
                 print(f"ℹ️ [{self.strategy_name}] ATM={self.engine.atm_strike} but monitoring strike={pos['strike']}")
