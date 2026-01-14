@@ -901,8 +901,8 @@ class DataEngine:
             # Strikes to monitor
             strikes_to_fetch = {
                 self.atm_strike,
-                self.atm_strike + 50, self.atm_strike + 100, self.atm_strike + 150,
-                self.atm_strike - 50, self.atm_strike - 100, self.atm_strike - 150
+                self.atm_strike + 50, self.atm_strike + 100,
+                self.atm_strike - 50, self.atm_strike - 100
             }
             strikes_to_fetch.update(self.active_monitoring_strikes)
             
