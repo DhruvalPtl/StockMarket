@@ -472,14 +472,16 @@ class DataEngine:
                 try:
                     spot_quote = self.api.get_quotes('NSE', NIFTY_SPOT_TOKEN)
                     if spot_quote and spot_quote.get('stat') == 'Ok':
-                        self.spot_ltp = float(spot_quote.get('lp', 0))
+                        ltp = float(spot_quote.get('lp', 0))
+                        if ltp > 0:  # Only update if we got a valid price
+                            self.spot_ltp = ltp
                     else:
                         if self.update_count % ERROR_LOG_INTERVAL == 0:
                             status = spot_quote.get('stat', 'unknown') if spot_quote else 'None'
-                            print(f"⚠️ Spot quote fetch failed with status: {status}")
+                            print(f"⚠️ Spot quote fetch failed with status: {status}, using previous LTP: {self.spot_ltp:.2f}")
                 except Exception as e:
                     if self.update_count % ERROR_LOG_INTERVAL == 0:
-                        print(f"⚠️ Spot quote error: {e}")
+                        print(f"⚠️ Spot quote error: {e}, using previous LTP: {self.spot_ltp:.2f}")
                 self.timing_stats['spot_fetch'] = time.time() - spot_start
                 
                 self.last_candle_fetch = datetime.now()
@@ -1148,12 +1150,14 @@ class DataEngine:
                     # Debug PCR calculation
                     if self.update_count % DEBUG_LOG_INTERVAL == 0:
                         strikes_list = sorted(new_strikes_data.keys()) if new_strikes_data else []
+                        ce_oi_m = total_ce_oi / 1_000_000  # Convert to millions
+                        pe_oi_m = total_pe_oi / 1_000_000  # Convert to millions
                         print(f"   📊 PCR Debug:")
                         print(f"      Strikes fetched: {len(new_strikes_data)}")
                         if strikes_list:
                             print(f"      Strike range: {strikes_list[0]} to {strikes_list[-1]}")
-                        print(f"      Total CE OI: {total_ce_oi:,}")
-                        print(f"      Total PE OI: {total_pe_oi:,}")
+                        print(f"      Total CE OI: {ce_oi_m:.2f}M ({total_ce_oi:,})")
+                        print(f"      Total PE OI: {pe_oi_m:.2f}M ({total_pe_oi:,})")
                         print(f"      PCR = {self.pcr:.4f}")
                         print(f"      Expected Groww: CE ~{EXPECTED_CE_OI_MILLIONS}M, "
                               f"PE ~{EXPECTED_PE_OI_MILLIONS}M, PCR ~{EXPECTED_PCR:.2f}")
