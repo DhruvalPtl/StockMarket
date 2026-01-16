@@ -89,7 +89,7 @@ MARKET_OPEN_HOUR = 9
 MARKET_OPEN_MINUTE = 15
 
 # Nifty token for Flattrade API
-NIFTY_SPOT_TOKEN = '26000'  # NSE NIFTY 50 index token
+NIFTY_SPOT_TOKEN = '26000'  # NSE NIFTY 50 index token (Flattrade API format)
 
 # Option chain fetch parameters
 # OPTION_CHAIN_STRIKE_COUNT: Number of strikes to fetch above AND below ATM
@@ -467,9 +467,16 @@ class DataEngine:
                 # 2. Fetch Spot LTP only (no indicator calculation)
                 self._rate_limit('spot')
                 spot_start = time.time()
-                spot_quote = self.api.get_quotes('NSE', NIFTY_SPOT_TOKEN)
-                if spot_quote and spot_quote.get('stat') == 'Ok':
-                    self.spot_ltp = float(spot_quote.get('lp', 0))
+                try:
+                    spot_quote = self.api.get_quotes('NSE', NIFTY_SPOT_TOKEN)
+                    if spot_quote and spot_quote.get('stat') == 'Ok':
+                        self.spot_ltp = float(spot_quote.get('lp', 0))
+                    else:
+                        if self.update_count % ERROR_LOG_INTERVAL == 0:
+                            print(f"⚠️ Spot quote fetch failed or returned invalid data")
+                except Exception as e:
+                    if self.update_count % ERROR_LOG_INTERVAL == 0:
+                        print(f"⚠️ Spot quote error: {e}")
                 self.timing_stats['spot_fetch'] = time.time() - spot_start
                 
                 self.last_candle_fetch = datetime.now()
@@ -965,7 +972,8 @@ class DataEngine:
             self._calculate_vwap(df)
             
             if self.update_count % INDICATOR_DEBUG_INTERVAL == 0:
-                print(f"   Indicators calculated from {len(df)} FUTURE candles")
+                print(f"   ✅ Indicators calculated from {len(df)} FUTURE candles:")
+                print(f"      RSI: {self.rsi:.1f} | ADX: {self.adx:.1f} | ATR: {self.atr:.1f} | VWAP: {self.vwap:.2f}")
             
         except Exception as e:
             print(f"❌ [{self.timeframe}] Future fetch error: {e}")
@@ -1144,7 +1152,8 @@ class DataEngine:
                         print(f"      Total CE OI: {total_ce_oi:,}")
                         print(f"      Total PE OI: {total_pe_oi:,}")
                         print(f"      PCR = {self.pcr:.4f}")
-                        print(f"      Expected Groww: CE ~{EXPECTED_CE_OI_MILLIONS}M, PE ~{EXPECTED_PE_OI_MILLIONS}M, PCR ~{EXPECTED_PCR:.2f}")
+                        print(f"      Expected Groww: CE ~{EXPECTED_CE_OI_MILLIONS}M, "
+                              f"PE ~{EXPECTED_PE_OI_MILLIONS}M, PCR ~{EXPECTED_PCR:.2f}")
                 
                 # Update ATM prices
                 if self.atm_strike in self.strikes_data:
