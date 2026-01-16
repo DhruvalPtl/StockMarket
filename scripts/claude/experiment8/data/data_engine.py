@@ -16,7 +16,6 @@ Key Changes:
 
 import pandas as pd
 import numpy as np
-import pandas_ta as ta
 import time
 import sys
 import os
@@ -25,6 +24,16 @@ from typing import Dict, List, Optional, Set, Tuple
 from collections import deque
 from dataclasses import dataclass
 from concurrent.futures import ThreadPoolExecutor, as_completed
+
+# Safe import for pandas_ta with fallback
+try:
+    import pandas_ta as ta
+    PANDAS_TA_AVAILABLE = True
+except ImportError:
+    PANDAS_TA_AVAILABLE = False
+    print("⚠️  WARNING: pandas_ta not available. Using fallback indicator calculations.")
+    print("   Install with: pip install pandas_ta")
+    ta = None
 
 # Add parent to path
 sys.path.append(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
@@ -208,6 +217,9 @@ class DataEngine:
         # Cached PCR data
         self.cached_pcr_strikes_data: Dict[int, StrikeOIData] = {}
         
+        # Chain call tracking
+        self.chain_calls_count: int = 0
+        
         # Rate limiting
         self.last_api_call: Dict[str, float] = {'spot': 0, 'future': 0, 'chain': 0}
         
@@ -270,7 +282,8 @@ class DataEngine:
             
             cols = [
                 "Timestamp", "Spot", "Future", "RSI", "ADX", "ATR", 
-                "VWAP", "EMA5", "EMA13", "ATM", "PCR", "Volume_Rel"
+                "VWAP", "EMA5", "EMA13", "ATM", "PCR", "Volume_Rel",
+                "PCR_LastRefresh", "ChainCalls"
             ]
             with open(self.log_file, 'w') as f:
                 f.write(",".join(cols) + "\n")
@@ -917,6 +930,9 @@ class DataEngine:
         try:
             now = datetime.now()
             
+            # Reset chain calls counter for this update
+            self.chain_calls_count = 0
+            
             # Check if PCR update needed (every 3 minutes)
             need_pcr_update = (
                 self.last_pcr_update is None or 
@@ -936,6 +952,9 @@ class DataEngine:
             
             # Always include active monitoring strikes (for position tracking)
             strikes_to_fetch.update(self.active_monitoring_strikes)
+            
+            # Track number of chain API calls (CE + PE per strike)
+            self.chain_calls_count = len(strikes_to_fetch) * 2
             
             # Build option symbols
             expiry_dt = datetime.strptime(self.option_expiry, "%Y-%m-%d")
@@ -1080,8 +1099,7 @@ class DataEngine:
         """
         Calculates technical indicators using pandas_ta for accuracy.
         Matches Groww/TradingView indicator values using Wilder's smoothing.
-        Why? We trade based on SPOT NIFTY movements.
-        RSI, ADX, ATR = price-based (not volume-based).
+        Falls back to manual calculations if pandas_ta is unavailable.
         """
         if len(df) < 14:
             return
@@ -1094,77 +1112,159 @@ class DataEngine:
         highs = df['h']
         lows = df['l']
         
-        # RSI using Wilder's smoothing (pandas_ta default)
-        rsi = ta.rsi(closes, length=14)
-        if rsi is not None and len(rsi) > 0 and not pd.isna(rsi.iloc[-1]):
-            self.rsi = float(rsi.iloc[-1])
-        
-        # EMAs
-        if len(closes) >= 50:
-            ema5 = ta.ema(closes, length=5)
-            ema13 = ta.ema(closes, length=13)
-            ema21 = ta.ema(closes, length=21)
-            ema50 = ta.ema(closes, length=50)
+        if PANDAS_TA_AVAILABLE and ta is not None:
+            # Use pandas_ta for Wilder's smoothing (matches charting platforms)
+            try:
+                # RSI using Wilder's smoothing (pandas_ta default)
+                rsi = ta.rsi(closes, length=14)
+                if rsi is not None and len(rsi) > 0 and not pd.isna(rsi.iloc[-1]):
+                    self.rsi = float(rsi.iloc[-1])
+                
+                # EMAs (require sufficient data)
+                if len(closes) >= 50:
+                    ema5 = ta.ema(closes, length=5)
+                    ema13 = ta.ema(closes, length=13)
+                    ema21 = ta.ema(closes, length=21)
+                    ema50 = ta.ema(closes, length=50)
+                    
+                    if ema5 is not None and not pd.isna(ema5.iloc[-1]):
+                        self.ema_5 = float(ema5.iloc[-1])
+                    if ema13 is not None and not pd.isna(ema13.iloc[-1]):
+                        self.ema_13 = float(ema13.iloc[-1])
+                    if ema21 is not None and not pd.isna(ema21.iloc[-1]):
+                        self.ema_21 = float(ema21.iloc[-1])
+                    if ema50 is not None and not pd.isna(ema50.iloc[-1]):
+                        self.ema_50 = float(ema50.iloc[-1])
+                
+                # ADX using Wilder's smoothing
+                adx_df = ta.adx(highs, lows, closes, length=14)
+                if adx_df is not None and 'ADX_14' in adx_df.columns:
+                    adx_val = adx_df['ADX_14'].iloc[-1]
+                    if not pd.isna(adx_val):
+                        self.adx = float(adx_val)
+                
+                # ATR using Wilder's smoothing
+                atr = ta.atr(highs, lows, closes, length=14)
+                if atr is not None and len(atr) > 0 and not pd.isna(atr.iloc[-1]):
+                    self.atr = float(atr.iloc[-1])
+            except Exception as e:
+                if self.update_count % 10 == 0:
+                    print(f"⚠️ pandas_ta indicator calculation error: {e}")
+                self._calculate_indicators_fallback(df, closes, highs, lows)
+        else:
+            # Fallback to manual calculations
+            self._calculate_indicators_fallback(df, closes, highs, lows)
+    
+    def _calculate_indicators_fallback(self, df: pd.DataFrame, closes, highs, lows):
+        """Fallback indicator calculations when pandas_ta is unavailable."""
+        try:
+            # Simple RSI calculation (approximation, not exact Wilder's)
+            if len(closes) >= 14:
+                delta = closes.diff()
+                gain = delta.where(delta > 0, 0).rolling(window=14).mean()
+                loss = -delta.where(delta < 0, 0).rolling(window=14).mean()
+                rs = gain / loss.replace(0, 1e-10)
+                rsi = 100 - (100 / (1 + rs))
+                if not pd.isna(rsi.iloc[-1]):
+                    self.rsi = float(rsi.iloc[-1])
             
-            if ema5 is not None and not pd.isna(ema5.iloc[-1]):
-                self.ema_5 = float(ema5.iloc[-1])
-            if ema13 is not None and not pd.isna(ema13.iloc[-1]):
-                self.ema_13 = float(ema13.iloc[-1])
-            if ema21 is not None and not pd.isna(ema21.iloc[-1]):
-                self.ema_21 = float(ema21.iloc[-1])
-            if ema50 is not None and not pd.isna(ema50.iloc[-1]):
-                self.ema_50 = float(ema50.iloc[-1])
-        
-        # ADX using Wilder's smoothing
-        adx_df = ta.adx(highs, lows, closes, length=14)
-        if adx_df is not None and 'ADX_14' in adx_df.columns:
-            adx_val = adx_df['ADX_14'].iloc[-1]
-            if not pd.isna(adx_val):
-                self.adx = float(adx_val)
-        
-        # ATR using Wilder's smoothing
-        atr = ta.atr(highs, lows, closes, length=14)
-        if atr is not None and len(atr) > 0 and not pd.isna(atr.iloc[-1]):
-            self.atr = float(atr.iloc[-1])
+            # Simple EMA calculations
+            if len(closes) >= 50:
+                self.ema_5 = float(closes.ewm(span=5, adjust=False).mean().iloc[-1])
+                self.ema_13 = float(closes.ewm(span=13, adjust=False).mean().iloc[-1])
+                self.ema_21 = float(closes.ewm(span=21, adjust=False).mean().iloc[-1])
+                self.ema_50 = float(closes.ewm(span=50, adjust=False).mean().iloc[-1])
+            
+            # Simple ATR calculation
+            if len(df) >= 14:
+                high_low = highs - lows
+                high_close = abs(highs - closes.shift())
+                low_close = abs(lows - closes.shift())
+                ranges = pd.concat([high_low, high_close, low_close], axis=1)
+                true_range = ranges.max(axis=1)
+                atr = true_range.rolling(window=14).mean()
+                if not pd.isna(atr.iloc[-1]):
+                    self.atr = float(atr.iloc[-1])
+            
+            # Simple ADX approximation (directional movement)
+            if len(df) >= 14:
+                # This is a simplified version - not as accurate as Wilder's
+                plus_dm = highs.diff()
+                minus_dm = -lows.diff()
+                plus_dm = plus_dm.where((plus_dm > minus_dm) & (plus_dm > 0), 0)
+                minus_dm = minus_dm.where((minus_dm > plus_dm) & (minus_dm > 0), 0)
+                
+                tr = pd.concat([high_low, high_close, low_close], axis=1).max(axis=1)
+                atr_14 = tr.rolling(window=14).mean()
+                
+                plus_di = 100 * (plus_dm.rolling(window=14).mean() / atr_14)
+                minus_di = 100 * (minus_dm.rolling(window=14).mean() / atr_14)
+                
+                dx = 100 * abs(plus_di - minus_di) / (plus_di + minus_di).replace(0, 1e-10)
+                adx = dx.rolling(window=14).mean()
+                
+                if not pd.isna(adx.iloc[-1]):
+                    self.adx = float(adx.iloc[-1])
+        except Exception as e:
+            if self.update_count % 10 == 0:
+                print(f"⚠️ Fallback indicator calculation error: {e}")
     
     def _calculate_vwap(self, df: pd.DataFrame):
         """
-        Calculates VWAP from FUTURE candles - TODAY's session only.
+        Calculates VWAP from FUTURE candles - TODAY's session only (post 09:15).
         VWAP resets at market open each day.
         Why? NIFTY is an index - it has NO volume!
         Only NIFTY FUTURE has actual traded volume.
-        Compare: SPOT price vs FUTURE VWAP
+        Compare: FUTURE price vs FUTURE VWAP
         """
-        # Filter to today's data only
+        if len(df) == 0:
+            self.vwap = self.fut_ltp if self.fut_ltp > 0 else 0
+            return
+        
+        # Filter to today's data only (post 09:15 AM)
         today = datetime.now().date()
         df = df.copy()
         
         if 'time' in df.columns:
             try:
+                # Convert timestamp to datetime
                 if df['time'].dtype in ['int64', 'float64']:
                     df['datetime'] = pd.to_datetime(df['time'], unit='s', errors='coerce')
                 else:
                     df['datetime'] = pd.to_datetime(df['time'], errors='coerce')
+                
+                # Filter to today AND after 09:15 AM
                 df = df[df['datetime'].dt.date == today]
-            except Exception:
-                pass
+                if len(df) > 0:
+                    market_open_time = datetime.combine(today, datetime.min.time().replace(hour=9, minute=15))
+                    df = df[df['datetime'] >= market_open_time]
+            except Exception as e:
+                if self.update_count % 10 == 0:
+                    print(f"⚠️ VWAP datetime filtering error: {e}")
         
         if len(df) == 0 or 'v' not in df.columns or df['v'].sum() == 0:
             # No valid data for VWAP calculation
             if self.fut_ltp > 0:
                 self.vwap = self.fut_ltp
-            elif len(df) > 0:
+            elif len(df) > 0 and 'c' in df.columns:
                 self.vwap = float(df['c'].mean())
             else:
                 self.vwap = 0
             return
         
-        # Use pandas_ta VWAP
-        vwap = ta.vwap(df['h'], df['l'], df['c'], df['v'])
-        if vwap is not None and len(vwap) > 0 and not pd.isna(vwap.iloc[-1]):
-            self.vwap = float(vwap.iloc[-1])
-        else:
-            # Manual fallback
+        # Use pandas_ta VWAP if available
+        if PANDAS_TA_AVAILABLE and ta is not None:
+            try:
+                vwap = ta.vwap(df['h'], df['l'], df['c'], df['v'])
+                if vwap is not None and len(vwap) > 0 and not pd.isna(vwap.iloc[-1]):
+                    self.vwap = float(vwap.iloc[-1])
+                    return
+            except Exception as e:
+                if self.update_count % 10 == 0:
+                    print(f"⚠️ pandas_ta VWAP calculation error: {e}")
+        
+        # Manual fallback calculation
+        try:
             typical_price = (df['h'] + df['l'] + df['c']) / 3
             cumulative_tp_vol = (typical_price * df['v']).cumsum()
             cumulative_vol = df['v'].cumsum()
@@ -1176,6 +1276,10 @@ class DataEngine:
             else:
                 # Fallback to LTP if no volume
                 self.vwap = self.fut_ltp if self.fut_ltp > 0 else float(df['c'].mean())
+        except Exception as e:
+            if self.update_count % 10 == 0:
+                print(f"⚠️ Manual VWAP calculation error: {e}")
+            self.vwap = self.fut_ltp if self.fut_ltp > 0 else 0
     
     def _update_opening_range(self):
         """Updates opening range during first 15 minutes."""
@@ -1232,7 +1336,11 @@ class DataEngine:
         if not self.log_file:
             return
         
-        try: 
+        try:
+            pcr_refresh_time = ""
+            if self.last_pcr_update:
+                pcr_refresh_time = self.last_pcr_update.strftime("%H:%M:%S")
+            
             row = [
                 datetime.now().strftime("%H:%M:%S"),
                 f"{self.spot_ltp:.2f}",
@@ -1245,7 +1353,9 @@ class DataEngine:
                 f"{self.ema_13:.2f}",
                 str(self.atm_strike),
                 f"{self.pcr:.2f}",
-                f"{self.volume_relative:.2f}"
+                f"{self.volume_relative:.2f}",
+                pcr_refresh_time,
+                str(self.chain_calls_count)
             ]
             
             with open(self.log_file, 'a') as f:
@@ -1265,23 +1375,23 @@ class DataEngine:
 if __name__ == "__main__":
     print("\n🔬 Testing Data Engine...\n")
     
-    engine = DataEngine(
-        api_key="test",
-        api_secret="test",
-        option_expiry="2026-01-06",
-        future_expiry="2026-01-27",
-        fut_symbol="NSE-NIFTY-27Jan26-FUT",
-        timeframe="1minute"
-    )
+    # Check pandas_ta availability
+    if PANDAS_TA_AVAILABLE:
+        print("✅ pandas_ta is available - using Wilder's smoothing for indicators")
+    else:
+        print("⚠️  pandas_ta is NOT available - using fallback calculations")
+        print("   Install with: pip install pandas_ta")
     
-    print("Running mock updates...")
-    for i in range(5):
-        engine.update()
-        print(f"Update {i+1}:  Spot={engine.spot_ltp:.2f}, RSI={engine.rsi:.1f}, "
-              f"ADX={engine.adx:.1f}, ATM={engine.atm_strike}")
+    print("\nNote: This is a basic import test.")
+    print("Full functionality requires valid Flattrade credentials and market hours.")
+    print("See config.py for USER_TOKEN and USER_ID setup.\n")
     
-    print(f"\nOpening Range: {engine.opening_range_low:.2f} - {engine.opening_range_high:.2f}")
-    print(f"PCR: {engine.pcr:.2f}")
-    print(f"Volume Relative: {engine.volume_relative:.2f}x")
+    # Basic structure test (no API calls)
+    try:
+        from config import BotConfig
+        print(f"Config loaded: PCR update interval = {BotConfig.PCR_UPDATE_INTERVAL}s")
+        print(f"Rate limits: Spot={BotConfig.RATE_LIMIT_SPOT}s, Chain={BotConfig.RATE_LIMIT_CHAIN}s")
+    except Exception as e:
+        print(f"❌ Config test failed: {e}")
     
-    print("\n✅ Data Engine Test Complete!")
+    print("\n✅ Data Engine Module Test Complete!")
