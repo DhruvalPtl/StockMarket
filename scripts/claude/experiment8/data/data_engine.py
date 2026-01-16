@@ -85,7 +85,9 @@ MARKET_OPEN_HOUR = 9
 MARKET_OPEN_MINUTE = 15
 
 # Option chain fetch parameters
-OPTION_CHAIN_STRIKE_COUNT = 10  # Number of strikes above/below ATM to fetch for PCR calculation (±500 points = 21 strikes)
+# OPTION_CHAIN_STRIKE_COUNT: Number of strikes to fetch above AND below ATM
+# Example: OPTION_CHAIN_STRIKE_COUNT=10 fetches 10 above + ATM + 10 below = 21 total strikes (±500 points with 50-point intervals)
+OPTION_CHAIN_STRIKE_COUNT = 10
 OPTION_CHAIN_FALLBACK_RANGE_START = -500  # Fallback range start offset from ATM
 OPTION_CHAIN_FALLBACK_RANGE_END = 550  # Fallback range end offset from ATM
 OPTION_CHAIN_FALLBACK_STEP = 50  # Step size for fallback range
@@ -1000,7 +1002,8 @@ class DataEngine:
                                 strikes_to_fetch.add(strike)
                         
                         if self.update_count % 20 == 0:
-                            print(f"   PCR: Fetched {len(strikes_to_fetch)} strikes from option chain (ATM ±500)")
+                            range_info = f"ATM ±{max(abs(OPTION_CHAIN_FALLBACK_RANGE_START), abs(OPTION_CHAIN_FALLBACK_RANGE_END))}"
+                            print(f"   PCR: Fetched {len(strikes_to_fetch)} strikes from option chain ({range_info})")
                     else:
                         # Fallback: Use wider range if API doesn't return full chain
                         strikes_to_fetch = set()
@@ -1399,12 +1402,15 @@ class DataEngine:
                 # Set proper DatetimeIndex
                 if 'datetime' in df.columns and not df['datetime'].isna().all():
                     df_vwap = df_vwap.set_index('datetime')
-                else:
+                elif 'time' in df.columns:
                     # Create datetime index from time column
                     if df['time'].dtype in ['int64', 'float64']:
                         df_vwap.index = pd.to_datetime(df['time'], unit='s')
                     else:
                         df_vwap.index = pd.to_datetime(df['time'], dayfirst=True, errors='coerce')
+                else:
+                    # No time column available, cannot create DatetimeIndex
+                    raise ValueError("Neither 'datetime' nor 'time' column found in dataframe")
                 
                 # Sort by datetime for proper VWAP calculation
                 df_vwap = df_vwap.sort_index()
