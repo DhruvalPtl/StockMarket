@@ -89,6 +89,8 @@ MARKET_OPEN_HOUR = 9
 MARKET_OPEN_MINUTE = 15
 
 # Nifty token for Flattrade API
+# Token obtained from Flattrade API symbol search for NSE:NIFTY 50
+# See: Flattrade API searchscrip endpoint or master symbol file
 NIFTY_SPOT_TOKEN = '26000'  # NSE NIFTY 50 index token (Flattrade API format)
 
 # Option chain fetch parameters
@@ -473,7 +475,8 @@ class DataEngine:
                         self.spot_ltp = float(spot_quote.get('lp', 0))
                     else:
                         if self.update_count % ERROR_LOG_INTERVAL == 0:
-                            print(f"⚠️ Spot quote fetch failed or returned invalid data")
+                            status = spot_quote.get('stat', 'unknown') if spot_quote else 'None'
+                            print(f"⚠️ Spot quote fetch failed with status: {status}")
                 except Exception as e:
                     if self.update_count % ERROR_LOG_INTERVAL == 0:
                         print(f"⚠️ Spot quote error: {e}")
