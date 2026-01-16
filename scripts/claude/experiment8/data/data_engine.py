@@ -80,9 +80,16 @@ EPSILON = 1e-10
 # Error logging interval (only log errors every N updates to avoid spam)
 ERROR_LOG_INTERVAL = 10
 
+# Debug output intervals
+DEBUG_LOG_INTERVAL = 10  # For PCR and VWAP debug output
+INDICATOR_DEBUG_INTERVAL = 20  # For indicator calculation debug output
+
 # Market timing constants
 MARKET_OPEN_HOUR = 9
 MARKET_OPEN_MINUTE = 15
+
+# Nifty token for Flattrade API
+NIFTY_SPOT_TOKEN = '26000'  # NSE NIFTY 50 index token
 
 # Option chain fetch parameters
 # OPTION_CHAIN_STRIKE_COUNT: Number of strikes to fetch above AND below ATM
@@ -91,6 +98,11 @@ OPTION_CHAIN_STRIKE_COUNT = 10
 OPTION_CHAIN_FALLBACK_RANGE_START = -500  # Fallback range start offset from ATM
 OPTION_CHAIN_FALLBACK_RANGE_END = 550  # Fallback range end offset from ATM
 OPTION_CHAIN_FALLBACK_STEP = 50  # Step size for fallback range
+
+# Expected values for validation (from Groww reference)
+EXPECTED_CE_OI_MILLIONS = 3.1  # Expected Call OI in millions
+EXPECTED_PE_OI_MILLIONS = 2.0  # Expected Put OI in millions
+EXPECTED_PCR = 0.65  # Expected Put-Call Ratio
 
 
 @dataclass
@@ -455,7 +467,7 @@ class DataEngine:
                 # 2. Fetch Spot LTP only (no indicator calculation)
                 self._rate_limit('spot')
                 spot_start = time.time()
-                spot_quote = self.api.get_quotes('NSE', '26000')
+                spot_quote = self.api.get_quotes('NSE', NIFTY_SPOT_TOKEN)
                 if spot_quote and spot_quote.get('stat') == 'Ok':
                     self.spot_ltp = float(spot_quote.get('lp', 0))
                 self.timing_stats['spot_fetch'] = time.time() - spot_start
@@ -952,7 +964,7 @@ class DataEngine:
             # Calculate VWAP from FUTURE data
             self._calculate_vwap(df)
             
-            if self.update_count % 20 == 0:
+            if self.update_count % INDICATOR_DEBUG_INTERVAL == 0:
                 print(f"   Indicators calculated from {len(df)} FUTURE candles")
             
         except Exception as e:
@@ -1123,7 +1135,7 @@ class DataEngine:
                     self.pcr = total_pe_oi / total_ce_oi
                     
                     # Debug PCR calculation
-                    if self.update_count % 10 == 0:
+                    if self.update_count % DEBUG_LOG_INTERVAL == 0:
                         strikes_list = sorted(new_strikes_data.keys()) if new_strikes_data else []
                         print(f"   📊 PCR Debug:")
                         print(f"      Strikes fetched: {len(new_strikes_data)}")
@@ -1132,7 +1144,7 @@ class DataEngine:
                         print(f"      Total CE OI: {total_ce_oi:,}")
                         print(f"      Total PE OI: {total_pe_oi:,}")
                         print(f"      PCR = {self.pcr:.4f}")
-                        print(f"      Expected Groww: CE ~3.1M, PE ~2.0M, PCR ~0.65")
+                        print(f"      Expected Groww: CE ~{EXPECTED_CE_OI_MILLIONS}M, PE ~{EXPECTED_PE_OI_MILLIONS}M, PCR ~{EXPECTED_PCR:.2f}")
                 
                 # Update ATM prices
                 if self.atm_strike in self.strikes_data:
@@ -1386,7 +1398,7 @@ class DataEngine:
                     df = df[df['datetime'] >= market_open_time]
                 
                 # Debug output every 10 updates
-                if self.update_count % 10 == 0 and len(df) > 0:
+                if self.update_count % DEBUG_LOG_INTERVAL == 0 and len(df) > 0:
                     print(f"   📊 VWAP Debug:")
                     print(f"      Using {len(df)} candles from today's session")
                     print(f"      First: {df['datetime'].iloc[0]}, Last: {df['datetime'].iloc[-1]}")
@@ -1441,7 +1453,7 @@ class DataEngine:
                     vwap = ta.vwap(df_vwap['h'], df_vwap['l'], df_vwap['c'], df_vwap['v'])
                     if vwap is not None and len(vwap) > 0 and not pd.isna(vwap.iloc[-1]):
                         self.vwap = float(vwap.iloc[-1])
-                        if self.update_count % 10 == 0:
+                        if self.update_count % DEBUG_LOG_INTERVAL == 0:
                             print(f"      Calculated VWAP: ₹{self.vwap:.2f}")
                             print(f"      Current FUT LTP: ₹{self.fut_ltp:.2f}")
                         return
