@@ -85,9 +85,9 @@ MARKET_OPEN_HOUR = 9
 MARKET_OPEN_MINUTE = 15
 
 # Option chain fetch parameters
-OPTION_CHAIN_STRIKE_COUNT = 50  # Number of strikes above/below ATM to fetch for PCR calculation
-OPTION_CHAIN_FALLBACK_RANGE_START = -1000  # Fallback range start offset from ATM
-OPTION_CHAIN_FALLBACK_RANGE_END = 1050  # Fallback range end offset from ATM
+OPTION_CHAIN_STRIKE_COUNT = 10  # Number of strikes above/below ATM to fetch for PCR calculation (±500 points = 21 strikes)
+OPTION_CHAIN_FALLBACK_RANGE_START = -500  # Fallback range start offset from ATM
+OPTION_CHAIN_FALLBACK_RANGE_END = 550  # Fallback range end offset from ATM
 OPTION_CHAIN_FALLBACK_STEP = 50  # Step size for fallback range
 
 
@@ -816,7 +816,7 @@ class DataEngine:
                 try:
                     # Convert timestamp - could be int or string
                     if isinstance(row['time'], str):
-                        ts = pd.to_datetime(row['time']).timestamp()
+                        ts = pd.to_datetime(row['time'], dayfirst=True).timestamp()
                     else:
                         ts = int(row['time'])
                     
@@ -1000,7 +1000,7 @@ class DataEngine:
                                 strikes_to_fetch.add(strike)
                         
                         if self.update_count % 20 == 0:
-                            print(f"   PCR: Fetched {len(strikes_to_fetch)} strikes from option chain")
+                            print(f"   PCR: Fetched {len(strikes_to_fetch)} strikes from option chain (ATM ±500)")
                     else:
                         # Fallback: Use wider range if API doesn't return full chain
                         strikes_to_fetch = set()
@@ -1109,6 +1109,15 @@ class DataEngine:
                     self.total_ce_oi = total_ce_oi
                     self.total_pe_oi = total_pe_oi
                     self.pcr = total_pe_oi / total_ce_oi
+                    
+                    # DEBUG: Compare with Groww
+                    if self.update_count % 10 == 0:
+                        print(f"   PCR Debug: {len(new_strikes_data)} strikes fetched")
+                        print(f"   Total CE OI: {total_ce_oi:,} | Total PE OI: {total_pe_oi:,}")
+                        print(f"   PCR = {self.pcr:.4f}")
+                        if new_strikes_data:
+                            strikes_list = sorted(new_strikes_data.keys())
+                            print(f"   Strike range: {strikes_list[0]} to {strikes_list[-1]}")
                 
                 # Update ATM prices
                 if self.atm_strike in self.strikes_data:
@@ -1184,6 +1193,11 @@ class DataEngine:
         closes = df['c']
         highs = df['h']
         lows = df['l']
+        
+        # DEBUG: Show what data we're using
+        if self.update_count % 10 == 0:
+            print(f"   Calculating indicators from {len(df)} candles")
+            print(f"   Close range: {closes.min():.2f} to {closes.max():.2f}")
         
         if PANDAS_TA_AVAILABLE and ta is not None:
             # Use pandas_ta for Wilder's smoothing (matches charting platforms)
@@ -1337,7 +1351,7 @@ class DataEngine:
                     df['datetime'] = df['datetime'].dt.tz_localize('UTC').dt.tz_convert(ist)
                 else:
                     # String datetime - parse and convert to IST
-                    df['datetime'] = pd.to_datetime(df['time'], errors='coerce')
+                    df['datetime'] = pd.to_datetime(df['time'], errors='coerce', dayfirst=True)
                     if df['datetime'].dt.tz is None:
                         df['datetime'] = df['datetime'].dt.tz_localize(ist)
                     else:
@@ -1379,10 +1393,33 @@ class DataEngine:
         # Use pandas_ta VWAP if available
         if PANDAS_TA_AVAILABLE and ta is not None:
             try:
-                vwap = ta.vwap(df['h'], df['l'], df['c'], df['v'])
-                if vwap is not None and len(vwap) > 0 and not pd.isna(vwap.iloc[-1]):
-                    self.vwap = float(vwap.iloc[-1])
-                    return
+                # CRITICAL: pandas_ta VWAP requires DatetimeIndex
+                df_vwap = df.copy()
+                
+                # Set proper DatetimeIndex
+                if 'datetime' in df.columns and not df['datetime'].isna().all():
+                    df_vwap = df_vwap.set_index('datetime')
+                else:
+                    # Create datetime index from time column
+                    if df['time'].dtype in ['int64', 'float64']:
+                        df_vwap.index = pd.to_datetime(df['time'], unit='s')
+                    else:
+                        df_vwap.index = pd.to_datetime(df['time'], dayfirst=True, errors='coerce')
+                
+                # Sort by datetime for proper VWAP calculation
+                df_vwap = df_vwap.sort_index()
+                
+                # Remove any NaT (invalid dates)
+                df_vwap = df_vwap[df_vwap.index.notna()]
+                
+                if len(df_vwap) > 0:
+                    # Now pandas_ta VWAP will work correctly with DatetimeIndex
+                    vwap = ta.vwap(df_vwap['h'], df_vwap['l'], df_vwap['c'], df_vwap['v'])
+                    if vwap is not None and len(vwap) > 0 and not pd.isna(vwap.iloc[-1]):
+                        self.vwap = float(vwap.iloc[-1])
+                        if self.update_count % 10 == 0:
+                            print(f"   VWAP calculated: ₹{self.vwap:.2f} (using {len(df_vwap)} candles)")
+                        return
             except Exception as e:
                 if self.update_count % ERROR_LOG_INTERVAL == 0:
                     print(f"⚠️ pandas_ta VWAP calculation error: {e}")
