@@ -69,7 +69,7 @@ class StrikeOIData:
     ce_oi_change: int = 0
     pe_oi_change: int = 0
     ce_ltp: float = 0.0
-    pe_ltp:  float = 0.0
+    pe_ltp: float = 0.0
     ce_iv: float = 0.0
     pe_iv: float = 0.0
     ce_delta: float = 0.0
@@ -1069,7 +1069,7 @@ class DataEngine:
             self.strikes_data[strike] = strike_data
             
             return strike_data
-            
+
         except Exception as e:
             print(f"⚠️ On-demand fetch error for {strike}: {e}")
             return None
