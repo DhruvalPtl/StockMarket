@@ -246,6 +246,9 @@ class DataEngine:
         self.update_count:  int = 0
         self.warmup_complete: bool = False
         
+        # Cache for pandas_ta parameter support checks
+        self._pandas_ta_atr_supports_mamode: Optional[bool] = None
+        
         # Performance timing
         self.timing_stats: Dict[str, float] = {
             'spot_fetch': 0.0,
@@ -977,7 +980,7 @@ class DataEngine:
                     
                     # Fetch complete option chain
                     # Note: count parameter determines how many strikes above/below to fetch
-                    # Using a large count to get all available strikes
+                    # Fetches up to OPTION_CHAIN_STRIKE_COUNT strikes above and below ATM
                     chain_result = self.api.get_option_chain(
                         exchange='NFO',
                         tradingsymbol=f'NIFTY{expiry_str}',
@@ -1215,12 +1218,14 @@ class DataEngine:
                             print(f"   ADX = {self.adx:.2f} (pandas_ta with Wilder's smoothing)")
                 
                 # ATR with explicit RMA mode (Wilder's smoothing)
-                # Check if mamode parameter is supported in current pandas_ta version
-                atr_sig = inspect.signature(ta.atr)
-                if 'mamode' in atr_sig.parameters:
+                # Check if mamode parameter is supported in current pandas_ta version (cached)
+                if self._pandas_ta_atr_supports_mamode is None:
+                    atr_sig = inspect.signature(ta.atr)
+                    self._pandas_ta_atr_supports_mamode = 'mamode' in atr_sig.parameters
+                
+                if self._pandas_ta_atr_supports_mamode:
                     atr = ta.atr(highs, lows, closes, length=14, mamode='rma')
                 else:
-                    # Fallback if mamode parameter not supported
                     atr = ta.atr(highs, lows, closes, length=14)
                 
                 if atr is not None and len(atr) > 0 and not pd.isna(atr.iloc[-1]):
