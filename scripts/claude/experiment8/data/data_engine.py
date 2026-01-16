@@ -1127,7 +1127,7 @@ class DataEngine:
         if atr is not None and len(atr) > 0 and not pd.isna(atr.iloc[-1]):
             self.atr = float(atr.iloc[-1])
     
-    def _calculate_vwap(self, df:  pd.DataFrame):
+    def _calculate_vwap(self, df: pd.DataFrame):
         """
         Calculates VWAP from FUTURE candles - TODAY's session only.
         VWAP resets at market open each day.
@@ -1150,7 +1150,13 @@ class DataEngine:
                 pass
         
         if len(df) == 0 or 'v' not in df.columns or df['v'].sum() == 0:
-            self.vwap = self.fut_ltp if self.fut_ltp > 0 else float(df['c'].mean()) if len(df) > 0 else 0
+            # No valid data for VWAP calculation
+            if self.fut_ltp > 0:
+                self.vwap = self.fut_ltp
+            elif len(df) > 0:
+                self.vwap = float(df['c'].mean())
+            else:
+                self.vwap = 0
             return
         
         # Use pandas_ta VWAP
@@ -1162,8 +1168,14 @@ class DataEngine:
             typical_price = (df['h'] + df['l'] + df['c']) / 3
             cumulative_tp_vol = (typical_price * df['v']).cumsum()
             cumulative_vol = df['v'].cumsum()
-            vwap_series = cumulative_tp_vol / cumulative_vol
-            self.vwap = float(vwap_series.iloc[-1])
+            
+            # Guard against division by zero
+            if cumulative_vol.iloc[-1] > 0:
+                vwap_series = cumulative_tp_vol / cumulative_vol
+                self.vwap = float(vwap_series.iloc[-1])
+            else:
+                # Fallback to LTP if no volume
+                self.vwap = self.fut_ltp if self.fut_ltp > 0 else float(df['c'].mean())
     
     def _update_opening_range(self):
         """Updates opening range during first 15 minutes."""
