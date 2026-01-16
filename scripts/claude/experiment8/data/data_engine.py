@@ -80,9 +80,18 @@ EPSILON = 1e-10
 # Error logging interval (only log errors every N updates to avoid spam)
 ERROR_LOG_INTERVAL = 10
 
+# Debug output intervals
+DEBUG_LOG_INTERVAL = 10  # For PCR and VWAP debug output
+INDICATOR_DEBUG_INTERVAL = 20  # For indicator calculation debug output
+
 # Market timing constants
 MARKET_OPEN_HOUR = 9
 MARKET_OPEN_MINUTE = 15
+
+# Nifty token for Flattrade API
+# Token obtained from Flattrade API symbol search for NSE:NIFTY 50
+# See: Flattrade API searchscrip endpoint or master symbol file
+NIFTY_SPOT_TOKEN = '26000'  # NSE NIFTY 50 index token (Flattrade API format)
 
 # Option chain fetch parameters
 # OPTION_CHAIN_STRIKE_COUNT: Number of strikes to fetch above AND below ATM
@@ -91,6 +100,11 @@ OPTION_CHAIN_STRIKE_COUNT = 10
 OPTION_CHAIN_FALLBACK_RANGE_START = -500  # Fallback range start offset from ATM
 OPTION_CHAIN_FALLBACK_RANGE_END = 550  # Fallback range end offset from ATM
 OPTION_CHAIN_FALLBACK_STEP = 50  # Step size for fallback range
+
+# Expected values for validation (from Groww reference)
+EXPECTED_CE_OI_MILLIONS = 3.1  # Expected Call OI in millions
+EXPECTED_PE_OI_MILLIONS = 2.0  # Expected Put OI in millions
+EXPECTED_PCR = 0.65  # Expected Put-Call Ratio
 
 
 @dataclass
@@ -443,19 +457,32 @@ class DataEngine:
             
             if need_candles:
                 # FULL FETCH MODE (takes ~60s)
-                print(f"   [{self.timeframe}] Full candle fetch...")
+                # Calculate ALL indicators from FUTURES (matches Groww chart)
+                print(f"   [{self.timeframe}] Full candle fetch (FUTURES)...")
                 
-                # 1.Fetch Spot data (for RSI, EMA)
-                self._rate_limit('spot')
-                spot_start = time.time()
-                self._fetch_spot_data()
-                self.timing_stats['spot_fetch'] = time.time() - spot_start
-                
-                # 2.Fetch Future data (for VWAP, patterns)
+                # 1. Fetch Future data with full indicator calculation
                 self._rate_limit('future')
                 fut_start = time.time()
-                self._fetch_future_data()
+                self._fetch_future_data()  # Will call both _calculate_indicators() and _calculate_vwap()
                 self.timing_stats['future_fetch'] = time.time() - fut_start
+                
+                # 2. Fetch Spot LTP only (no indicator calculation)
+                self._rate_limit('spot')
+                spot_start = time.time()
+                try:
+                    spot_quote = self.api.get_quotes('NSE', NIFTY_SPOT_TOKEN)
+                    if spot_quote and spot_quote.get('stat') == 'Ok':
+                        ltp = float(spot_quote.get('lp', 0))
+                        if ltp > 0:  # Only update if we got a valid price
+                            self.spot_ltp = ltp
+                    else:
+                        if self.update_count % ERROR_LOG_INTERVAL == 0:
+                            status = spot_quote.get('stat', 'unknown') if spot_quote else 'None'
+                            print(f"⚠️ Spot quote fetch failed with status: {status}, using previous LTP: {self.spot_ltp:.2f}")
+                except Exception as e:
+                    if self.update_count % ERROR_LOG_INTERVAL == 0:
+                        print(f"⚠️ Spot quote error: {e}, using previous LTP: {self.spot_ltp:.2f}")
+                self.timing_stats['spot_fetch'] = time.time() - spot_start
                 
                 self.last_candle_fetch = datetime.now()
             else:
@@ -834,8 +861,8 @@ class DataEngine:
                 except (ValueError, TypeError) as e:
                     continue  # Skip invalid rows
             
-            # Calculate price-based indicators from SPOT data
-            self._calculate_indicators(df)
+            # Note: Indicators are now calculated from FUTURES in _fetch_future_data()
+            # This maintains spot candles only for reference
             
         except Exception as e:
             print(f"❌ [{self.timeframe}] Spot fetch error: {e}")
@@ -943,8 +970,15 @@ class DataEngine:
             self.candle_range = self.fut_high - self.fut_low
             self.is_green_candle = self.fut_close > self.fut_open
             
+            # Calculate ALL indicators from FUTURE data (matches Groww charts)
+            self._calculate_indicators(df)
+            
             # Calculate VWAP from FUTURE data
             self._calculate_vwap(df)
+            
+            if self.update_count % INDICATOR_DEBUG_INTERVAL == 0:
+                print(f"   ✅ Indicators calculated from {len(df)} FUTURE candles:")
+                print(f"      RSI: {self.rsi:.1f} | ADX: {self.adx:.1f} | ATR: {self.atr:.1f} | VWAP: {self.vwap:.2f}")
             
         except Exception as e:
             print(f"❌ [{self.timeframe}] Future fetch error: {e}")
@@ -1113,14 +1147,20 @@ class DataEngine:
                     self.total_pe_oi = total_pe_oi
                     self.pcr = total_pe_oi / total_ce_oi
                     
-                    # DEBUG: Compare with Groww
-                    if self.update_count % 10 == 0:
-                        print(f"   PCR Debug: {len(new_strikes_data)} strikes fetched")
-                        print(f"   Total CE OI: {total_ce_oi:,} | Total PE OI: {total_pe_oi:,}")
-                        print(f"   PCR = {self.pcr:.4f}")
-                        if new_strikes_data:
-                            strikes_list = sorted(new_strikes_data.keys())
-                            print(f"   Strike range: {strikes_list[0]} to {strikes_list[-1]}")
+                    # Debug PCR calculation
+                    if self.update_count % DEBUG_LOG_INTERVAL == 0:
+                        strikes_list = sorted(new_strikes_data.keys()) if new_strikes_data else []
+                        ce_oi_m = total_ce_oi / 1_000_000  # Convert to millions
+                        pe_oi_m = total_pe_oi / 1_000_000  # Convert to millions
+                        print(f"   📊 PCR Debug:")
+                        print(f"      Strikes fetched: {len(new_strikes_data)}")
+                        if strikes_list:
+                            print(f"      Strike range: {strikes_list[0]} to {strikes_list[-1]}")
+                        print(f"      Total CE OI: {ce_oi_m:.2f}M ({total_ce_oi:,})")
+                        print(f"      Total PE OI: {pe_oi_m:.2f}M ({total_pe_oi:,})")
+                        print(f"      PCR = {self.pcr:.4f}")
+                        print(f"      Expected Groww: CE ~{EXPECTED_CE_OI_MILLIONS}M, "
+                              f"PE ~{EXPECTED_PE_OI_MILLIONS}M, PCR ~{EXPECTED_PCR:.2f}")
                 
                 # Update ATM prices
                 if self.atm_strike in self.strikes_data:
@@ -1374,8 +1414,11 @@ class DataEngine:
                     df = df[df['datetime'] >= market_open_time]
                 
                 # Debug output every 10 updates
-                if self.update_count % 10 == 0 and len(df) > 0:
-                    print(f"   VWAP: Using {len(df)} candles from today's session (first: {df['datetime'].iloc[0]}, last: {df['datetime'].iloc[-1]})")
+                if self.update_count % DEBUG_LOG_INTERVAL == 0 and len(df) > 0:
+                    print(f"   📊 VWAP Debug:")
+                    print(f"      Using {len(df)} candles from today's session")
+                    print(f"      First: {df['datetime'].iloc[0]}, Last: {df['datetime'].iloc[-1]}")
+                    print(f"      Volume sum: {df['v'].sum():,.0f}")
             except Exception as e:
                 if self.update_count % ERROR_LOG_INTERVAL == 0:
                     print(f"⚠️ VWAP datetime filtering error: {e}")
@@ -1426,8 +1469,9 @@ class DataEngine:
                     vwap = ta.vwap(df_vwap['h'], df_vwap['l'], df_vwap['c'], df_vwap['v'])
                     if vwap is not None and len(vwap) > 0 and not pd.isna(vwap.iloc[-1]):
                         self.vwap = float(vwap.iloc[-1])
-                        if self.update_count % 10 == 0:
-                            print(f"   VWAP calculated: ₹{self.vwap:.2f} (using {len(df_vwap)} candles)")
+                        if self.update_count % DEBUG_LOG_INTERVAL == 0:
+                            print(f"      Calculated VWAP: ₹{self.vwap:.2f}")
+                            print(f"      Current FUT LTP: ₹{self.fut_ltp:.2f}")
                         return
             except Exception as e:
                 if self.update_count % ERROR_LOG_INTERVAL == 0:
