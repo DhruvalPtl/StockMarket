@@ -29,6 +29,9 @@ class BotConfig:
     RATE_LIMIT_SPOT = 0.5
     RATE_LIMIT_FUTURE = 0.5
     RATE_LIMIT_CHAIN = 1.0
+    
+    # PCR Update Interval (Seconds)
+    PCR_UPDATE_INTERVAL = 180  # Update PCR every 3 minutes
 
     # ============================================================
     # 2.CONTRACT DETAILS

@@ -16,6 +16,7 @@ Key Changes:
 
 import pandas as pd
 import numpy as np
+import pandas_ta as ta
 import time
 import sys
 import os
@@ -199,6 +200,13 @@ class DataEngine:
         
         # Active strike monitoring
         self.active_monitoring_strikes: Set[int] = set()
+        
+        # PCR update tracking
+        self.last_pcr_update: Optional[datetime] = None
+        self.pcr_update_interval = BotConfig.PCR_UPDATE_INTERVAL  # 3 minutes in seconds
+        
+        # Cached PCR data
+        self.cached_pcr_strikes_data: Dict[int, StrikeOIData] = {}
         
         # Rate limiting
         self.last_api_call: Dict[str, float] = {'spot': 0, 'future': 0, 'chain': 0}
@@ -495,7 +503,8 @@ class DataEngine:
     
     def get_affordable_strike(self, option_type: str, max_cost: float) -> Optional[StrikeOIData]:
         """
-        Finds the best affordable strike.
+        Finds the best affordable strike with on-demand fetching.
+        Only fetches additional strikes if ATM is too expensive.
         
         Args:
             option_type: 'CE' or 'PE'
@@ -513,15 +522,22 @@ class DataEngine:
             candidates = [self.atm_strike, self.atm_strike - 50, self.atm_strike - 100]
         
         for strike in candidates:
+            # Check if we already have this strike's data
             if strike in self.strikes_data:
                 data = self.strikes_data[strike]
-                price = data.ce_ltp if option_type == 'CE' else data.pe_ltp
-                
-                # Valid price must be at least ₹1
-                if price >= 1.0:
-                    cost = price * lot_size
-                    if cost <= max_cost:
-                        return data
+            else:
+                # Fetch on-demand
+                data = self.fetch_strike_on_demand(strike)
+                if not data:
+                    continue
+            
+            price = data.ce_ltp if option_type == 'CE' else data.pe_ltp
+            
+            # Valid price must be at least ₹1
+            if price >= 1.0:
+                cost = price * lot_size
+                if cost <= max_cost:
+                    return data
         
         return None
     
@@ -689,7 +705,10 @@ class DataEngine:
             
             # Get historical candles
             interval = self.timeframe_map.get(self.timeframe, '1')
-            start_dt = datetime.now() - timedelta(days=5)
+            # For indicators, we need ~100 candles max (EMA50 needs ~50 + buffer)
+            # At 1 minute timeframe, 100 candles = ~1.5 hours of data
+            # Use 2 days to be safe for gaps and market hours
+            start_dt = datetime.now() - timedelta(days=2)
             start_time = int(time.mktime(start_dt.timetuple()))
             
             resp = self.api.get_time_price_series(
@@ -807,7 +826,9 @@ class DataEngine:
             
             # Get historical candles
             interval = self.timeframe_map.get(self.timeframe, '1')
-            start_dt = datetime.now() - timedelta(days=5)
+            # For indicators and VWAP, we need recent data
+            # Use 2 days to be safe for gaps and market hours
+            start_dt = datetime.now() - timedelta(days=2)
             start_time = int(time.mktime(start_dt.timetuple()))
             
             resp = self.api.get_time_price_series(
@@ -884,34 +905,42 @@ class DataEngine:
                 print(f"⚠️ Future fetch error: {e}")
     
     def _fetch_option_chain(self):
-        """Fetches option chain data using Flattrade API."""
-        if not self.is_connected:
-            print(f"⚠️ [{self.timeframe}] Not connected to API - cannot fetch option chain")
+        """
+        Optimized option chain fetching:
+        - ATM only for live prices (every update)
+        - Full range for PCR (every 3 minutes)
+        - On-demand for position monitoring
+        """
+        if not self.is_connected or self.atm_strike == 0:
             return
         
         try:
-            if self.atm_strike == 0:
-                return  # Need ATM first
+            now = datetime.now()
             
-            # Flattrade: Need to construct individual option symbols
-            # Format: NIFTY13JAN26C24000 (NIFTY + DD + MMM + YY + C/P + STRIKE)
-            expiry_dt = datetime.strptime(self.option_expiry, "%Y-%m-%d")
-            expiry_str = expiry_dt.strftime('%d%b%y').upper()  # e.g., 13JAN26
+            # Check if PCR update needed (every 3 minutes)
+            need_pcr_update = (
+                self.last_pcr_update is None or 
+                (now - self.last_pcr_update).total_seconds() >= self.pcr_update_interval
+            )
             
-            # Strikes to monitor
-            strikes_to_fetch = {
-                self.atm_strike,
-                self.atm_strike + 50, self.atm_strike + 100,
-                self.atm_strike - 50, self.atm_strike - 100
-            }
+            # Determine strikes to fetch
+            if need_pcr_update:
+                # Wide range for PCR calculation: ATM ±300 (13 strikes)
+                strikes_to_fetch = set()
+                for offset in range(-300, 350, 50):
+                    strikes_to_fetch.add(self.atm_strike + offset)
+                self.last_pcr_update = now
+            else:
+                # Minimal fetch: ATM only + active monitoring strikes
+                strikes_to_fetch = {self.atm_strike}
+            
+            # Always include active monitoring strikes (for position tracking)
             strikes_to_fetch.update(self.active_monitoring_strikes)
             
-            # Fetch each strike in parallel (much faster!)
-            new_strikes_data: Dict[int, StrikeOIData] = {}
-            total_ce_oi = 0
-            total_pe_oi = 0
+            # Build option symbols
+            expiry_dt = datetime.strptime(self.option_expiry, "%Y-%m-%d")
+            expiry_str = expiry_dt.strftime('%d%b%y').upper()
             
-            # Prepare all symbols first
             strike_symbols = {}
             for strike in strikes_to_fetch:
                 ce_symbol = f"NIFTY{expiry_str}C{strike}"
@@ -920,35 +949,29 @@ class DataEngine:
                 pe_token = self._get_token('NFO', pe_symbol)
                 
                 if ce_token and pe_token:
-                    strike_symbols[strike] = {
-                        'ce_token': ce_token,
-                        'pe_token': pe_token
-                    }
+                    strike_symbols[strike] = {'ce_token': ce_token, 'pe_token': pe_token}
             
-            # Fetch all quotes in parallel
+            # Parallel fetch
+            new_strikes_data: Dict[int, StrikeOIData] = {}
+            total_ce_oi = 0
+            total_pe_oi = 0
+            
             with ThreadPoolExecutor(max_workers=10) as executor:
                 futures = {}
-                
                 for strike, tokens in strike_symbols.items():
-                    futures[f'ce_{strike}'] = executor.submit(
-                        self.api.get_quotes, 'NFO', tokens['ce_token']
-                    )
-                    futures[f'pe_{strike}'] = executor.submit(
-                        self.api.get_quotes, 'NFO', tokens['pe_token']
-                    )
+                    futures[f'ce_{strike}'] = executor.submit(self.api.get_quotes, 'NFO', tokens['ce_token'])
+                    futures[f'pe_{strike}'] = executor.submit(self.api.get_quotes, 'NFO', tokens['pe_token'])
                 
-                # Collect results
                 quotes = {}
                 for key, future in futures.items():
                     try:
                         result = future.result(timeout=3.0)
                         if result and result.get('stat') == 'Ok':
                             quotes[key] = result
-                    except Exception as e:
-                        if self.update_count % 10 == 0:
-                            print(f"⚠️ Quote fetch timeout: {key}")
+                    except Exception:
+                        pass
             
-            # Process collected quotes
+            # Process quotes
             for strike in strike_symbols.keys():
                 ce_key = f'ce_{strike}'
                 pe_key = f'pe_{strike}'
@@ -957,148 +980,190 @@ class DataEngine:
                     continue
                 
                 try:
-                    # Extract CE data
                     ce_quote = quotes[ce_key]
+                    pe_quote = quotes[pe_key]
+                    
                     ce_oi = int(ce_quote.get('oi', 0))
                     ce_ltp = float(ce_quote.get('lp', 0))
-                    
-                    # Extract PE data
-                    pe_quote = quotes[pe_key]
                     pe_oi = int(pe_quote.get('oi', 0))
                     pe_ltp = float(pe_quote.get('lp', 0))
                     
-                    # Create strike data
                     strike_data = StrikeOIData(strike=strike)
-                    
-                    # CE data
                     strike_data.ce_oi = ce_oi
                     strike_data.ce_ltp = ce_ltp
                     strike_data.ce_oi_change = ce_oi - self.prev_ce_oi.get(strike, ce_oi)
-                    self.prev_ce_oi[strike] = ce_oi
-                    total_ce_oi += ce_oi
-                    
-                    # PE data
                     strike_data.pe_oi = pe_oi
                     strike_data.pe_ltp = pe_ltp
                     strike_data.pe_oi_change = pe_oi - self.prev_pe_oi.get(strike, pe_oi)
+                    
+                    self.prev_ce_oi[strike] = ce_oi
                     self.prev_pe_oi[strike] = pe_oi
-                    total_pe_oi += pe_oi
                     
                     new_strikes_data[strike] = strike_data
+                    total_ce_oi += ce_oi
+                    total_pe_oi += pe_oi
                     
-                except Exception as e:
-                    if self.update_count % 10 == 0:
-                        print(f"⚠️ Strike {strike} process error: {e}")
+                except Exception:
                     continue
             
-            # Commit updates
+            # Update strikes data
             if new_strikes_data:
-                self.strikes_data = new_strikes_data
-                self.total_ce_oi = total_ce_oi if total_ce_oi > 0 else self.total_ce_oi
-                self.total_pe_oi = total_pe_oi if total_pe_oi > 0 else self.total_pe_oi
-                self.pcr = total_pe_oi / total_ce_oi if total_ce_oi > 0 else 1.0
+                # Merge with existing (don't lose position tracking data)
+                for strike, data in new_strikes_data.items():
+                    self.strikes_data[strike] = data
                 
-                # ATM data
+                # Update PCR only when we did full fetch
+                if need_pcr_update and total_ce_oi > 0:
+                    self.total_ce_oi = total_ce_oi
+                    self.total_pe_oi = total_pe_oi
+                    self.pcr = total_pe_oi / total_ce_oi
+                
+                # Update ATM prices
                 if self.atm_strike in self.strikes_data:
                     atm_data = self.strikes_data[self.atm_strike]
                     self.atm_ce_ltp = atm_data.ce_ltp
                     self.atm_pe_ltp = atm_data.pe_ltp
-                    # Note: Flattrade doesn't provide IV in basic quotes, set to 0
-                    self.atm_iv = 0.0
-            
+                    
         except Exception as e:
             if self.update_count % 10 == 0:
                 print(f"⚠️ Chain fetch error: {e}")
+    
+    def fetch_strike_on_demand(self, strike: int) -> Optional[StrikeOIData]:
+        """
+        Fetches a single strike's data on-demand.
+        Used when ATM is too expensive and we need to check OTM strikes.
+        """
+        if not self.is_connected:
+            return None
+        
+        try:
+            expiry_dt = datetime.strptime(self.option_expiry, "%Y-%m-%d")
+            expiry_str = expiry_dt.strftime('%d%b%y').upper()
+            
+            ce_symbol = f"NIFTY{expiry_str}C{strike}"
+            pe_symbol = f"NIFTY{expiry_str}P{strike}"
+            
+            ce_token = self._get_token('NFO', ce_symbol)
+            pe_token = self._get_token('NFO', pe_symbol)
+            
+            if not ce_token or not pe_token:
+                return None
+            
+            # Fetch both quotes
+            ce_quote = self.api.get_quotes('NFO', ce_token)
+            pe_quote = self.api.get_quotes('NFO', pe_token)
+            
+            if not ce_quote or not pe_quote:
+                return None
+            
+            if ce_quote.get('stat') != 'Ok' or pe_quote.get('stat') != 'Ok':
+                return None
+            
+            strike_data = StrikeOIData(strike=strike)
+            strike_data.ce_ltp = float(ce_quote.get('lp', 0))
+            strike_data.pe_ltp = float(pe_quote.get('lp', 0))
+            strike_data.ce_oi = int(ce_quote.get('oi', 0))
+            strike_data.pe_oi = int(pe_quote.get('oi', 0))
+            
+            # Cache it
+            self.strikes_data[strike] = strike_data
+            
+            return strike_data
+            
+        except Exception as e:
+            print(f"⚠️ On-demand fetch error for {strike}: {e}")
+            return None
     
     # ==================== INDICATOR CALCULATIONS ====================
     
     def _calculate_indicators(self, df: pd.DataFrame):
         """
-        Calculates technical indicators from SPOT data.
+        Calculates technical indicators using pandas_ta for accuracy.
+        Matches Groww/TradingView indicator values using Wilder's smoothing.
         Why? We trade based on SPOT NIFTY movements.
         RSI, ADX, ATR = price-based (not volume-based).
         """
-        closes = df['c'].astype(float)
-        highs = df['h'].astype(float)
-        lows = df['l'].astype(float)
+        if len(df) < 14:
+            return
+        
+        # Ensure numeric types
+        for col in ['o', 'h', 'l', 'c']:
+            df[col] = pd.to_numeric(df[col], errors='coerce')
+        
+        closes = df['c']
+        highs = df['h']
+        lows = df['l']
+        
+        # RSI using Wilder's smoothing (pandas_ta default)
+        rsi = ta.rsi(closes, length=14)
+        if rsi is not None and len(rsi) > 0 and not pd.isna(rsi.iloc[-1]):
+            self.rsi = float(rsi.iloc[-1])
         
         # EMAs
         if len(closes) >= 50:
-            self.ema_5 = float(closes.ewm(span=5, adjust=False).mean().iloc[-1])
-            self.ema_13 = float(closes.ewm(span=13, adjust=False).mean().iloc[-1])
-            self.ema_21 = float(closes.ewm(span=21, adjust=False).mean().iloc[-1])
-            self.ema_50 = float(closes.ewm(span=50, adjust=False).mean().iloc[-1])
+            ema5 = ta.ema(closes, length=5)
+            ema13 = ta.ema(closes, length=13)
+            ema21 = ta.ema(closes, length=21)
+            ema50 = ta.ema(closes, length=50)
+            
+            if ema5 is not None and not pd.isna(ema5.iloc[-1]):
+                self.ema_5 = float(ema5.iloc[-1])
+            if ema13 is not None and not pd.isna(ema13.iloc[-1]):
+                self.ema_13 = float(ema13.iloc[-1])
+            if ema21 is not None and not pd.isna(ema21.iloc[-1]):
+                self.ema_21 = float(ema21.iloc[-1])
+            if ema50 is not None and not pd.isna(ema50.iloc[-1]):
+                self.ema_50 = float(ema50.iloc[-1])
         
-        # RSI
-        if len(closes) > 14:
-            delta = closes.diff()
-            gain = delta.where(delta > 0, 0.0).ewm(alpha=1/14, adjust=False).mean()
-            loss = (-delta.where(delta < 0, 0.0)).ewm(alpha=1/14, adjust=False).mean()
-            rs = gain / loss
-            self.rsi = float(100 - (100 / (1 + rs)).iloc[-1])
+        # ADX using Wilder's smoothing
+        adx_df = ta.adx(highs, lows, closes, length=14)
+        if adx_df is not None and 'ADX_14' in adx_df.columns:
+            adx_val = adx_df['ADX_14'].iloc[-1]
+            if not pd.isna(adx_val):
+                self.adx = float(adx_val)
         
-        # ADX and ATR
-        if len(df) > 14:
-            self._calculate_adx_atr(highs, lows, closes)
-    
-    def _calculate_adx_atr(self, highs: pd.Series, lows: pd.Series, closes: pd.Series):
-        """Calculates ADX and ATR."""
-        period = 14
-        
-        if len(closes) < period + 1:
-            return
-        
-        # True Range
-        prev_close = closes.shift(1)
-        tr1 = highs - lows
-        tr2 = abs(highs - prev_close)
-        tr3 = abs(lows - prev_close)
-        tr = pd.concat([tr1, tr2, tr3], axis=1).max(axis=1)
-        
-        # ATR
-        atr = tr.rolling(window=period).mean()
-        self.atr = float(atr.iloc[-1]) if not pd.isna(atr.iloc[-1]) else 0.0
-        
-        # Directional Movement
-        up_move = highs - highs.shift(1)
-        down_move = lows.shift(1) - lows
-        
-        plus_dm = up_move.where((up_move > down_move) & (up_move > 0), 0.0)
-        minus_dm = down_move.where((down_move > up_move) & (down_move > 0), 0.0)
-        
-        # Smoothed
-        atr_smooth = tr.ewm(span=period, adjust=False).mean()
-        plus_dm_smooth = plus_dm.ewm(span=period, adjust=False).mean()
-        minus_dm_smooth = minus_dm.ewm(span=period, adjust=False).mean()
-        
-        # DI
-        plus_di = 100 * plus_dm_smooth / atr_smooth
-        minus_di = 100 * minus_dm_smooth / atr_smooth
-        
-        # DX and ADX
-        di_sum = plus_di + minus_di
-        dx = 100 * abs(plus_di - minus_di) / di_sum.where(di_sum != 0, 1)
-        adx = dx.ewm(span=period, adjust=False).mean()
-        
-        self.adx = float(adx.iloc[-1]) if not pd.isna(adx.iloc[-1]) else 0.0
+        # ATR using Wilder's smoothing
+        atr = ta.atr(highs, lows, closes, length=14)
+        if atr is not None and len(atr) > 0 and not pd.isna(atr.iloc[-1]):
+            self.atr = float(atr.iloc[-1])
     
     def _calculate_vwap(self, df:  pd.DataFrame):
         """
-        Calculates VWAP from FUTURE candles.
+        Calculates VWAP from FUTURE candles - TODAY's session only.
+        VWAP resets at market open each day.
         Why? NIFTY is an index - it has NO volume!
         Only NIFTY FUTURE has actual traded volume.
         Compare: SPOT price vs FUTURE VWAP
         """
-        if 'v' not in df.columns or df['v'].sum() == 0:
-            self.vwap = float(df['c'].mean())
+        # Filter to today's data only
+        today = datetime.now().date()
+        df = df.copy()
+        
+        if 'time' in df.columns:
+            try:
+                if df['time'].dtype in ['int64', 'float64']:
+                    df['datetime'] = pd.to_datetime(df['time'], unit='s', errors='coerce')
+                else:
+                    df['datetime'] = pd.to_datetime(df['time'], errors='coerce')
+                df = df[df['datetime'].dt.date == today]
+            except Exception:
+                pass
+        
+        if len(df) == 0 or 'v' not in df.columns or df['v'].sum() == 0:
+            self.vwap = self.fut_ltp if self.fut_ltp > 0 else float(df['c'].mean()) if len(df) > 0 else 0
             return
         
-        typical_price = (df['h'] + df['l'] + df['c']) / 3
-        cumulative_tp_vol = (typical_price * df['v']).cumsum()
-        cumulative_vol = df['v'].cumsum()
-        
-        vwap_series = cumulative_tp_vol / cumulative_vol
-        self.vwap = float(vwap_series.iloc[-1])
+        # Use pandas_ta VWAP
+        vwap = ta.vwap(df['h'], df['l'], df['c'], df['v'])
+        if vwap is not None and len(vwap) > 0 and not pd.isna(vwap.iloc[-1]):
+            self.vwap = float(vwap.iloc[-1])
+        else:
+            # Manual fallback
+            typical_price = (df['h'] + df['l'] + df['c']) / 3
+            cumulative_tp_vol = (typical_price * df['v']).cumsum()
+            cumulative_vol = df['v'].cumsum()
+            vwap_series = cumulative_tp_vol / cumulative_vol
+            self.vwap = float(vwap_series.iloc[-1])
     
     def _update_opening_range(self):
         """Updates opening range during first 15 minutes."""
