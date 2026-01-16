@@ -443,19 +443,22 @@ class DataEngine:
             
             if need_candles:
                 # FULL FETCH MODE (takes ~60s)
-                print(f"   [{self.timeframe}] Full candle fetch...")
+                # Calculate ALL indicators from FUTURES (matches Groww chart)
+                print(f"   [{self.timeframe}] Full candle fetch (FUTURES)...")
                 
-                # 1.Fetch Spot data (for RSI, EMA)
-                self._rate_limit('spot')
-                spot_start = time.time()
-                self._fetch_spot_data()
-                self.timing_stats['spot_fetch'] = time.time() - spot_start
-                
-                # 2.Fetch Future data (for VWAP, patterns)
+                # 1. Fetch Future data with full indicator calculation
                 self._rate_limit('future')
                 fut_start = time.time()
-                self._fetch_future_data()
+                self._fetch_future_data()  # Will call both _calculate_indicators() and _calculate_vwap()
                 self.timing_stats['future_fetch'] = time.time() - fut_start
+                
+                # 2. Fetch Spot LTP only (no indicator calculation)
+                self._rate_limit('spot')
+                spot_start = time.time()
+                spot_quote = self.api.get_quotes('NSE', '26000')
+                if spot_quote and spot_quote.get('stat') == 'Ok':
+                    self.spot_ltp = float(spot_quote.get('lp', 0))
+                self.timing_stats['spot_fetch'] = time.time() - spot_start
                 
                 self.last_candle_fetch = datetime.now()
             else:
@@ -834,8 +837,8 @@ class DataEngine:
                 except (ValueError, TypeError) as e:
                     continue  # Skip invalid rows
             
-            # Calculate price-based indicators from SPOT data
-            self._calculate_indicators(df)
+            # Note: Indicators are now calculated from FUTURES in _fetch_future_data()
+            # This maintains spot candles only for reference
             
         except Exception as e:
             print(f"❌ [{self.timeframe}] Spot fetch error: {e}")
@@ -943,8 +946,14 @@ class DataEngine:
             self.candle_range = self.fut_high - self.fut_low
             self.is_green_candle = self.fut_close > self.fut_open
             
+            # Calculate ALL indicators from FUTURE data (matches Groww charts)
+            self._calculate_indicators(df)
+            
             # Calculate VWAP from FUTURE data
             self._calculate_vwap(df)
+            
+            if self.update_count % 20 == 0:
+                print(f"   Indicators calculated from {len(df)} FUTURE candles")
             
         except Exception as e:
             print(f"❌ [{self.timeframe}] Future fetch error: {e}")
@@ -1113,14 +1122,17 @@ class DataEngine:
                     self.total_pe_oi = total_pe_oi
                     self.pcr = total_pe_oi / total_ce_oi
                     
-                    # DEBUG: Compare with Groww
+                    # Debug PCR calculation
                     if self.update_count % 10 == 0:
-                        print(f"   PCR Debug: {len(new_strikes_data)} strikes fetched")
-                        print(f"   Total CE OI: {total_ce_oi:,} | Total PE OI: {total_pe_oi:,}")
-                        print(f"   PCR = {self.pcr:.4f}")
-                        if new_strikes_data:
-                            strikes_list = sorted(new_strikes_data.keys())
-                            print(f"   Strike range: {strikes_list[0]} to {strikes_list[-1]}")
+                        strikes_list = sorted(new_strikes_data.keys()) if new_strikes_data else []
+                        print(f"   📊 PCR Debug:")
+                        print(f"      Strikes fetched: {len(new_strikes_data)}")
+                        if strikes_list:
+                            print(f"      Strike range: {strikes_list[0]} to {strikes_list[-1]}")
+                        print(f"      Total CE OI: {total_ce_oi:,}")
+                        print(f"      Total PE OI: {total_pe_oi:,}")
+                        print(f"      PCR = {self.pcr:.4f}")
+                        print(f"      Expected Groww: CE ~3.1M, PE ~2.0M, PCR ~0.65")
                 
                 # Update ATM prices
                 if self.atm_strike in self.strikes_data:
@@ -1375,7 +1387,10 @@ class DataEngine:
                 
                 # Debug output every 10 updates
                 if self.update_count % 10 == 0 and len(df) > 0:
-                    print(f"   VWAP: Using {len(df)} candles from today's session (first: {df['datetime'].iloc[0]}, last: {df['datetime'].iloc[-1]})")
+                    print(f"   📊 VWAP Debug:")
+                    print(f"      Using {len(df)} candles from today's session")
+                    print(f"      First: {df['datetime'].iloc[0]}, Last: {df['datetime'].iloc[-1]}")
+                    print(f"      Volume sum: {df['v'].sum():,.0f}")
             except Exception as e:
                 if self.update_count % ERROR_LOG_INTERVAL == 0:
                     print(f"⚠️ VWAP datetime filtering error: {e}")
@@ -1427,7 +1442,8 @@ class DataEngine:
                     if vwap is not None and len(vwap) > 0 and not pd.isna(vwap.iloc[-1]):
                         self.vwap = float(vwap.iloc[-1])
                         if self.update_count % 10 == 0:
-                            print(f"   VWAP calculated: ₹{self.vwap:.2f} (using {len(df_vwap)} candles)")
+                            print(f"      Calculated VWAP: ₹{self.vwap:.2f}")
+                            print(f"      Current FUT LTP: ₹{self.fut_ltp:.2f}")
                         return
             except Exception as e:
                 if self.update_count % ERROR_LOG_INTERVAL == 0:
