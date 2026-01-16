@@ -86,6 +86,9 @@ MARKET_OPEN_MINUTE = 15
 
 # Option chain fetch parameters
 OPTION_CHAIN_STRIKE_COUNT = 50  # Number of strikes above/below ATM to fetch for PCR calculation
+OPTION_CHAIN_FALLBACK_RANGE_START = -1000  # Fallback range start offset from ATM
+OPTION_CHAIN_FALLBACK_RANGE_END = 1050  # Fallback range end offset from ATM
+OPTION_CHAIN_FALLBACK_STEP = 50  # Step size for fallback range
 
 
 @dataclass
@@ -974,6 +977,7 @@ class DataEngine:
             if need_pcr_update:
                 # NEW: Fetch ALL available strikes for accurate PCR
                 # Use Flattrade's get_option_chain API to get complete chain
+                strikes_to_fetch = set()  # Initialize with empty set
                 try:
                     expiry_dt = datetime.strptime(self.option_expiry, "%Y-%m-%d")
                     expiry_str = expiry_dt.strftime('%d%b%y').upper()
@@ -988,9 +992,8 @@ class DataEngine:
                         count=OPTION_CHAIN_STRIKE_COUNT  # Fetch strikes above and below ATM
                     )
                     
-                    if chain_result and 'values' in chain_result:
+                    if chain_result and 'values' in chain_result and len(chain_result['values']) > 0:
                         # Extract all strikes from chain
-                        strikes_to_fetch = set()
                         for item in chain_result['values']:
                             strike = int(float(item.get('strprc', 0)))
                             if strike > 0:
@@ -1001,7 +1004,7 @@ class DataEngine:
                     else:
                         # Fallback: Use wider range if API doesn't return full chain
                         strikes_to_fetch = set()
-                        for offset in range(-1000, 1050, 50):  # Much wider range
+                        for offset in range(OPTION_CHAIN_FALLBACK_RANGE_START, OPTION_CHAIN_FALLBACK_RANGE_END, OPTION_CHAIN_FALLBACK_STEP):
                             strikes_to_fetch.add(self.atm_strike + offset)
                         
                         if self.update_count % ERROR_LOG_INTERVAL == 0:
@@ -1009,7 +1012,7 @@ class DataEngine:
                 except Exception as e:
                     # Fallback on error
                     strikes_to_fetch = set()
-                    for offset in range(-1000, 1050, 50):  # Much wider range
+                    for offset in range(OPTION_CHAIN_FALLBACK_RANGE_START, OPTION_CHAIN_FALLBACK_RANGE_END, OPTION_CHAIN_FALLBACK_STEP):
                         strikes_to_fetch.add(self.atm_strike + offset)
                     
                     if self.update_count % ERROR_LOG_INTERVAL == 0:
@@ -1219,7 +1222,7 @@ class DataEngine:
                 
                 # ATR with explicit RMA mode (Wilder's smoothing)
                 # Check if mamode parameter is supported in current pandas_ta version (cached)
-                if self._pandas_ta_atr_supports_mamode is None:
+                if self._pandas_ta_atr_supports_mamode is None and ta is not None:
                     atr_sig = inspect.signature(ta.atr)
                     self._pandas_ta_atr_supports_mamode = 'mamode' in atr_sig.parameters
                 
