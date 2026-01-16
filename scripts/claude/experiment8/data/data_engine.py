@@ -1410,7 +1410,8 @@ class DataEngine:
                         df_vwap.index = pd.to_datetime(df['time'], dayfirst=True, errors='coerce')
                 else:
                     # No time column available, cannot create DatetimeIndex
-                    raise ValueError("Neither 'datetime' nor 'time' column found in dataframe")
+                    available_cols = list(df.columns)
+                    raise ValueError(f"Neither 'datetime' nor 'time' column found in dataframe. Available columns: {available_cols}")
                 
                 # Sort by datetime for proper VWAP calculation
                 df_vwap = df_vwap.sort_index()
