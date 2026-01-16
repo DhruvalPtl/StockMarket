@@ -19,7 +19,8 @@ import numpy as np
 import time
 import sys
 import os
-from datetime import datetime, timedelta
+import inspect
+from datetime import datetime, timedelta, timezone
 from typing import Dict, List, Optional, Set, Tuple
 from collections import deque
 from dataclasses import dataclass
@@ -82,6 +83,9 @@ ERROR_LOG_INTERVAL = 10
 # Market timing constants
 MARKET_OPEN_HOUR = 9
 MARKET_OPEN_MINUTE = 15
+
+# Option chain fetch parameters
+OPTION_CHAIN_STRIKE_COUNT = 50  # Number of strikes above/below ATM to fetch for PCR calculation
 
 
 @dataclass
@@ -978,7 +982,7 @@ class DataEngine:
                         exchange='NFO',
                         tradingsymbol=f'NIFTY{expiry_str}',
                         strikeprice=str(self.atm_strike),
-                        count=50  # Fetch 50 strikes above and below ATM
+                        count=OPTION_CHAIN_STRIKE_COUNT  # Fetch strikes above and below ATM
                     )
                     
                     if chain_result and 'values' in chain_result:
@@ -1211,10 +1215,11 @@ class DataEngine:
                             print(f"   ADX = {self.adx:.2f} (pandas_ta with Wilder's smoothing)")
                 
                 # ATR with explicit RMA mode (Wilder's smoothing)
-                # Note: Some pandas_ta versions use 'mamode' parameter
-                try:
+                # Check if mamode parameter is supported in current pandas_ta version
+                atr_sig = inspect.signature(ta.atr)
+                if 'mamode' in atr_sig.parameters:
                     atr = ta.atr(highs, lows, closes, length=14, mamode='rma')
-                except TypeError:
+                else:
                     # Fallback if mamode parameter not supported
                     atr = ta.atr(highs, lows, closes, length=14)
                 
@@ -1309,7 +1314,6 @@ class DataEngine:
             return
         
         # Filter to today's IST session only (post 09:15 AM)
-        from datetime import timezone, timedelta
         ist = timezone(timedelta(hours=5, minutes=30))
         now_ist = datetime.now(ist)
         today_ist = now_ist.date()
