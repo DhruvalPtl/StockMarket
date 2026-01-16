@@ -19,7 +19,8 @@ import numpy as np
 import time
 import sys
 import os
-from datetime import datetime, timedelta
+import inspect
+from datetime import datetime, timedelta, timezone
 from typing import Dict, List, Optional, Set, Tuple
 from collections import deque
 from dataclasses import dataclass
@@ -82,6 +83,12 @@ ERROR_LOG_INTERVAL = 10
 # Market timing constants
 MARKET_OPEN_HOUR = 9
 MARKET_OPEN_MINUTE = 15
+
+# Option chain fetch parameters
+OPTION_CHAIN_STRIKE_COUNT = 50  # Number of strikes above/below ATM to fetch for PCR calculation
+OPTION_CHAIN_FALLBACK_RANGE_START = -1000  # Fallback range start offset from ATM
+OPTION_CHAIN_FALLBACK_RANGE_END = 1050  # Fallback range end offset from ATM
+OPTION_CHAIN_FALLBACK_STEP = 50  # Step size for fallback range
 
 
 @dataclass
@@ -241,6 +248,9 @@ class DataEngine:
         # Update counter
         self.update_count:  int = 0
         self.warmup_complete: bool = False
+        
+        # Cache for pandas_ta parameter support checks
+        self._pandas_ta_atr_supports_mamode: Optional[bool] = None
         
         # Performance timing
         self.timing_stats: Dict[str, float] = {
@@ -630,6 +640,15 @@ class DataEngine:
         print(f"  ATR: {self.atr:>5.1f}              | VWAP: ₹{self.vwap:>9,.2f}")
         print(f"  PCR: {self.pcr:>5.2f} (PE/CE OI)   | VOL: {self.volume_relative:>5.2f}x avg")
         
+        # Add comparison prompt for manual verification (every 20 updates)
+        if self.update_count % 20 == 0:
+            print(f"\n  📊 VERIFY THESE VALUES IN GROWW/FLATTRADE CHART:")
+            print(f"     RSI(14) = {self.rsi:.2f}")
+            print(f"     ADX(14) = {self.adx:.2f}")
+            print(f"     ATR(14) = {self.atr:.2f}")
+            print(f"     VWAP = ₹{self.vwap:,.2f}")
+            print(f"     PCR = {self.pcr:.2f} (Total CE OI: {self.total_ce_oi:,}, Total PE OI: {self.total_pe_oi:,})")
+        
         # Options - compact view
         if show_options and self.strikes_data:
             print(f"\n  {'─'*71}")
@@ -956,10 +975,49 @@ class DataEngine:
             
             # Determine strikes to fetch
             if need_pcr_update:
-                # Wide range for PCR calculation: ATM ±300 (13 strikes)
-                strikes_to_fetch = set()
-                for offset in range(-300, 350, 50):
-                    strikes_to_fetch.add(self.atm_strike + offset)
+                # NEW: Fetch ALL available strikes for accurate PCR
+                # Use Flattrade's get_option_chain API to get complete chain
+                strikes_to_fetch = set()  # Initialize with empty set
+                try:
+                    expiry_dt = datetime.strptime(self.option_expiry, "%Y-%m-%d")
+                    expiry_str = expiry_dt.strftime('%d%b%y').upper()
+                    
+                    # Fetch complete option chain
+                    # Note: count parameter determines how many strikes above/below to fetch
+                    # Fetches up to OPTION_CHAIN_STRIKE_COUNT strikes above and below ATM
+                    chain_result = self.api.get_option_chain(
+                        exchange='NFO',
+                        tradingsymbol=f'NIFTY{expiry_str}',
+                        strikeprice=str(self.atm_strike),
+                        count=OPTION_CHAIN_STRIKE_COUNT  # Fetch strikes above and below ATM
+                    )
+                    
+                    if chain_result and 'values' in chain_result and len(chain_result['values']) > 0:
+                        # Extract all strikes from chain
+                        for item in chain_result['values']:
+                            strike = int(float(item.get('strprc', 0)))
+                            if strike > 0:
+                                strikes_to_fetch.add(strike)
+                        
+                        if self.update_count % 20 == 0:
+                            print(f"   PCR: Fetched {len(strikes_to_fetch)} strikes from option chain")
+                    else:
+                        # Fallback: Use wider range if API doesn't return full chain
+                        strikes_to_fetch = set()
+                        for offset in range(OPTION_CHAIN_FALLBACK_RANGE_START, OPTION_CHAIN_FALLBACK_RANGE_END, OPTION_CHAIN_FALLBACK_STEP):
+                            strikes_to_fetch.add(self.atm_strike + offset)
+                        
+                        if self.update_count % ERROR_LOG_INTERVAL == 0:
+                            print(f"⚠️ Option chain API returned no data, using fallback range")
+                except Exception as e:
+                    # Fallback on error
+                    strikes_to_fetch = set()
+                    for offset in range(OPTION_CHAIN_FALLBACK_RANGE_START, OPTION_CHAIN_FALLBACK_RANGE_END, OPTION_CHAIN_FALLBACK_STEP):
+                        strikes_to_fetch.add(self.atm_strike + offset)
+                    
+                    if self.update_count % ERROR_LOG_INTERVAL == 0:
+                        print(f"⚠️ Option chain fetch error, using fallback: {e}")
+                
                 self.last_pcr_update = now
             else:
                 # Minimal fetch: ATM only + active monitoring strikes
@@ -1130,10 +1188,12 @@ class DataEngine:
         if PANDAS_TA_AVAILABLE and ta is not None:
             # Use pandas_ta for Wilder's smoothing (matches charting platforms)
             try:
-                # RSI using Wilder's smoothing (pandas_ta default)
+                # RSI with Wilder's RMA smoothing (default in pandas_ta)
                 rsi = ta.rsi(closes, length=14)
                 if rsi is not None and len(rsi) > 0 and not pd.isna(rsi.iloc[-1]):
                     self.rsi = float(rsi.iloc[-1])
+                    if self.update_count % 20 == 0:
+                        print(f"   RSI = {self.rsi:.2f} (pandas_ta with Wilder's RMA)")
                 
                 # EMAs (require sufficient data)
                 if len(closes) >= 50:
@@ -1151,17 +1211,31 @@ class DataEngine:
                     if ema50 is not None and not pd.isna(ema50.iloc[-1]):
                         self.ema_50 = float(ema50.iloc[-1])
                 
-                # ADX using Wilder's smoothing
+                # ADX with Wilder's RMA smoothing
                 adx_df = ta.adx(highs, lows, closes, length=14)
                 if adx_df is not None and 'ADX_14' in adx_df.columns:
                     adx_val = adx_df['ADX_14'].iloc[-1]
                     if not pd.isna(adx_val):
                         self.adx = float(adx_val)
+                        if self.update_count % 20 == 0:
+                            print(f"   ADX = {self.adx:.2f} (pandas_ta with Wilder's smoothing)")
                 
-                # ATR using Wilder's smoothing
-                atr = ta.atr(highs, lows, closes, length=14)
+                # ATR with explicit RMA mode (Wilder's smoothing)
+                # Check if mamode parameter is supported in current pandas_ta version (cached)
+                if self._pandas_ta_atr_supports_mamode is None and ta is not None:
+                    atr_sig = inspect.signature(ta.atr)
+                    self._pandas_ta_atr_supports_mamode = 'mamode' in atr_sig.parameters
+                
+                if self._pandas_ta_atr_supports_mamode:
+                    atr = ta.atr(highs, lows, closes, length=14, mamode='rma')
+                else:
+                    atr = ta.atr(highs, lows, closes, length=14)
+                
                 if atr is not None and len(atr) > 0 and not pd.isna(atr.iloc[-1]):
                     self.atr = float(atr.iloc[-1])
+                    if self.update_count % 20 == 0:
+                        print(f"   ATR = {self.atr:.2f} (pandas_ta with Wilder's RMA)")
+                        
             except Exception as e:
                 if self.update_count % ERROR_LOG_INTERVAL == 0:
                     print(f"⚠️ pandas_ta indicator calculation error: {e}")
@@ -1237,7 +1311,7 @@ class DataEngine:
     
     def _calculate_vwap(self, df: pd.DataFrame):
         """
-        Calculates VWAP from FUTURE candles - TODAY's session only (post 09:15).
+        Calculates VWAP from FUTURE candles - TODAY's session only (post 09:15 IST).
         VWAP resets at market open each day.
         Why? NIFTY is an index - it has NO volume!
         Only NIFTY FUTURE has actual traded volume.
@@ -1247,38 +1321,59 @@ class DataEngine:
             self.vwap = self.fut_ltp if self.fut_ltp > 0 else 0
             return
         
-        # Filter to today's data only (post 09:15 AM)
-        today = datetime.now().date()
+        # Filter to today's IST session only (post 09:15 AM)
+        ist = timezone(timedelta(hours=5, minutes=30))
+        now_ist = datetime.now(ist)
+        today_ist = now_ist.date()
+        
         df = df.copy()
         
         if 'time' in df.columns:
             try:
-                # Convert timestamp to datetime
+                # Convert timestamp to IST datetime
                 if df['time'].dtype in ['int64', 'float64']:
+                    # Unix timestamp - convert to IST
                     df['datetime'] = pd.to_datetime(df['time'], unit='s', errors='coerce')
+                    df['datetime'] = df['datetime'].dt.tz_localize('UTC').dt.tz_convert(ist)
                 else:
+                    # String datetime - parse and convert to IST
                     df['datetime'] = pd.to_datetime(df['time'], errors='coerce')
+                    if df['datetime'].dt.tz is None:
+                        df['datetime'] = df['datetime'].dt.tz_localize(ist)
+                    else:
+                        df['datetime'] = df['datetime'].dt.tz_convert(ist)
                 
-                # Filter to today AND after market open (09:15 AM)
-                df = df[df['datetime'].dt.date == today]
+                # Filter to today's date in IST
+                df = df[df['datetime'].dt.date == today_ist]
+                
+                # Filter to post-market-open (>= 09:15 AM IST)
                 if len(df) > 0:
                     market_open_time = datetime.combine(
-                        today, 
+                        today_ist,
                         datetime.min.time().replace(hour=MARKET_OPEN_HOUR, minute=MARKET_OPEN_MINUTE)
-                    )
+                    ).replace(tzinfo=ist)
                     df = df[df['datetime'] >= market_open_time]
+                
+                # Debug output every 10 updates
+                if self.update_count % 10 == 0 and len(df) > 0:
+                    print(f"   VWAP: Using {len(df)} candles from today's session (first: {df['datetime'].iloc[0]}, last: {df['datetime'].iloc[-1]})")
             except Exception as e:
                 if self.update_count % ERROR_LOG_INTERVAL == 0:
                     print(f"⚠️ VWAP datetime filtering error: {e}")
+                # Continue with unfiltered data as fallback
         
+        # Validate we have volume data
         if len(df) == 0 or 'v' not in df.columns or df['v'].sum() == 0:
-            # No valid data for VWAP calculation
+            # No valid data for VWAP calculation - use LTP or average close
             if self.fut_ltp > 0:
                 self.vwap = self.fut_ltp
             elif len(df) > 0 and 'c' in df.columns:
                 self.vwap = float(df['c'].mean())
             else:
                 self.vwap = 0
+            
+            if self.update_count % ERROR_LOG_INTERVAL == 0:
+                print(f"⚠️ VWAP: No volume data, using fallback (LTP={self.fut_ltp:.2f})")
             return
         
         # Use pandas_ta VWAP if available
