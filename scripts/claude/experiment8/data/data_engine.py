@@ -1161,6 +1161,9 @@ class DataEngine:
         EPSILON = 1e-10
         
         try:
+            # Pre-calculate shifted closes for ATR and ADX
+            closes_prev = closes.shift() if len(closes) >= 14 else None
+            
             # Simple RSI calculation (approximation, not exact Wilder's)
             if len(closes) >= 14:
                 delta = closes.diff()
@@ -1179,9 +1182,8 @@ class DataEngine:
                 self.ema_50 = float(closes.ewm(span=50, adjust=False).mean().iloc[-1])
             
             # Simple ATR calculation
-            if len(df) >= 14:
+            if len(df) >= 14 and closes_prev is not None:
                 high_low = highs - lows
-                closes_prev = closes.shift()
                 high_close = abs(highs - closes_prev)
                 low_close = abs(lows - closes_prev)
                 ranges = pd.concat([high_low, high_close, low_close], axis=1)
@@ -1191,23 +1193,27 @@ class DataEngine:
                     self.atr = float(atr.iloc[-1])
             
             # Simple ADX approximation (directional movement)
-            if len(df) >= 14:
-                # This is a simplified version - not as accurate as Wilder's
-                plus_dm = highs.diff()
-                minus_dm = -lows.diff()
-                plus_dm = plus_dm.where((plus_dm > minus_dm) & (plus_dm > 0), 0)
-                minus_dm = minus_dm.where((minus_dm > plus_dm) & (minus_dm > 0), 0)
+            if len(df) >= 14 and closes_prev is not None:
+                # Calculate directional movements
+                plus_dm_raw = highs.diff()
+                minus_dm_raw = -lows.diff()
                 
-                # Calculate true range for ADX (avoiding variable shadowing)
+                # Filter directional movements (only keep strongest)
+                plus_dm = plus_dm_raw.where((plus_dm_raw > minus_dm_raw) & (plus_dm_raw > 0), 0)
+                minus_dm = minus_dm_raw.where((minus_dm_raw > plus_dm_raw) & (minus_dm_raw > 0), 0)
+                
+                # Calculate true range for ADX
                 high_low_adx = highs - lows
                 high_close_adx = abs(highs - closes_prev)
                 low_close_adx = abs(lows - closes_prev)
                 tr_adx = pd.concat([high_low_adx, high_close_adx, low_close_adx], axis=1).max(axis=1)
                 atr_14 = tr_adx.rolling(window=14).mean()
                 
+                # Calculate directional indicators
                 plus_di = 100 * (plus_dm.rolling(window=14).mean() / atr_14)
                 minus_di = 100 * (minus_dm.rolling(window=14).mean() / atr_14)
                 
+                # Calculate ADX from DI
                 dx = 100 * abs(plus_di - minus_di) / (plus_di + minus_di).replace(0, EPSILON)
                 adx = dx.rolling(window=14).mean()
                 
