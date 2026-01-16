@@ -1,8 +1,11 @@
-# Experiment 6 Requirements
+# Experiment 8 Requirements (Flattrade API)
 
 # Core
 pandas>=1.5.0
 numpy>=1.21.0
+
+# Technical Analysis
+pandas_ta>=0.3.14b
 
 # API (if using Groww)
 # growwapi  # Uncomment if available
