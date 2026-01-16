@@ -1334,6 +1334,8 @@ class DataEngine:
         Only NIFTY FUTURE has actual traded volume.
         Compare: FUTURE price vs FUTURE VWAP
         """
+        from pandas.api.types import is_numeric_dtype
+        
         if len(df) == 0:
             self.vwap = self.fut_ltp if self.fut_ltp > 0 else 0
             return
@@ -1348,7 +1350,6 @@ class DataEngine:
         if 'time' in df.columns:
             try:
                 # Convert timestamp to IST datetime
-                from pandas.api.types import is_numeric_dtype
                 if is_numeric_dtype(df['time']):
                     # Unix timestamp - convert to IST
                     df['datetime'] = pd.to_datetime(df['time'], unit='s', errors='coerce')
@@ -1405,7 +1406,6 @@ class DataEngine:
                     df_vwap = df_vwap.set_index('datetime')
                 elif 'time' in df.columns:
                     # Create datetime index from time column
-                    from pandas.api.types import is_numeric_dtype
                     if is_numeric_dtype(df['time']):
                         df_vwap.index = pd.to_datetime(df['time'], unit='s')
                     else:
