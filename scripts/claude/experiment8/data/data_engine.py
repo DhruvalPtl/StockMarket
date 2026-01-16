@@ -69,6 +69,21 @@ except ImportError as e:
 from config import BotConfig, get_timeframe_display_name
 
 
+# ============================================================
+# CONSTANTS
+# ============================================================
+
+# Small value to prevent division by zero in calculations
+EPSILON = 1e-10
+
+# Error logging interval (only log errors every N updates to avoid spam)
+ERROR_LOG_INTERVAL = 10
+
+# Market timing constants
+MARKET_OPEN_HOUR = 9
+MARKET_OPEN_MINUTE = 15
+
+
 @dataclass
 class StrikeOIData:
     """OI data for a specific strike."""
@@ -375,7 +390,7 @@ class DataEngine:
                             elif key == 'pe':
                                 self.atm_pe_ltp = lp
                     except Exception as e:
-                        if self.update_count % 10 == 0:
+                        if self.update_count % ERROR_LOG_INTERVAL == 0:
                             print(f"⚠️ Live price fetch error ({key}): {e}")
             
             # Update ATM strike from spot
@@ -467,7 +482,7 @@ class DataEngine:
             return True
             
         except Exception as e:
-            if self.update_count % 10 == 0:
+            if self.update_count % ERROR_LOG_INTERVAL == 0:
                 print(f"⚠️ [{self.timeframe}] Update error: {e}")
             return False
     
@@ -738,7 +753,7 @@ class DataEngine:
                 return
             
             if len(resp) == 0:
-                if self.update_count % 10 == 0:
+                if self.update_count % ERROR_LOG_INTERVAL == 0:
                     print(f"⚠️ [{self.timeframe}] Spot API returned empty candles")
                 return
             
@@ -769,7 +784,7 @@ class DataEngine:
             df = df.dropna(subset=['o', 'h', 'l', 'c'])
             
             if len(df) == 0:
-                if self.update_count % 10 == 0:
+                if self.update_count % ERROR_LOG_INTERVAL == 0:
                     print(f"⚠️ [{self.timeframe}] No valid spot data after filtering")
                 return
             
@@ -914,7 +929,7 @@ class DataEngine:
             print(f"❌ [{self.timeframe}] Future fetch error: {e}")
             import traceback
             traceback.print_exc()
-            if self.update_count % 10 == 0:
+            if self.update_count % ERROR_LOG_INTERVAL == 0:
                 print(f"⚠️ Future fetch error: {e}")
     
     def _fetch_option_chain(self):
@@ -1044,7 +1059,7 @@ class DataEngine:
                     self.atm_pe_ltp = atm_data.pe_ltp
                     
         except Exception as e:
-            if self.update_count % 10 == 0:
+            if self.update_count % ERROR_LOG_INTERVAL == 0:
                 print(f"⚠️ Chain fetch error: {e}")
     
     def fetch_strike_on_demand(self, strike: int) -> Optional[StrikeOIData]:
@@ -1148,7 +1163,7 @@ class DataEngine:
                 if atr is not None and len(atr) > 0 and not pd.isna(atr.iloc[-1]):
                     self.atr = float(atr.iloc[-1])
             except Exception as e:
-                if self.update_count % 10 == 0:
+                if self.update_count % ERROR_LOG_INTERVAL == 0:
                     print(f"⚠️ pandas_ta indicator calculation error: {e}")
                 self._calculate_indicators_fallback(df, closes, highs, lows)
         else:
@@ -1157,9 +1172,6 @@ class DataEngine:
     
     def _calculate_indicators_fallback(self, df: pd.DataFrame, closes, highs, lows):
         """Fallback indicator calculations when pandas_ta is unavailable."""
-        # Small value to prevent division by zero
-        EPSILON = 1e-10
-        
         try:
             # Pre-calculate shifted closes for ATR and ADX
             closes_prev = closes.shift() if len(closes) >= 14 else None
@@ -1220,7 +1232,7 @@ class DataEngine:
                 if not pd.isna(adx.iloc[-1]):
                     self.adx = float(adx.iloc[-1])
         except Exception as e:
-            if self.update_count % 10 == 0:
+            if self.update_count % ERROR_LOG_INTERVAL == 0:
                 print(f"⚠️ Fallback indicator calculation error: {e}")
     
     def _calculate_vwap(self, df: pd.DataFrame):
@@ -1247,13 +1259,16 @@ class DataEngine:
                 else:
                     df['datetime'] = pd.to_datetime(df['time'], errors='coerce')
                 
-                # Filter to today AND after 09:15 AM
+                # Filter to today AND after market open (09:15 AM)
                 df = df[df['datetime'].dt.date == today]
                 if len(df) > 0:
-                    market_open_time = datetime.combine(today, datetime.min.time().replace(hour=9, minute=15))
+                    market_open_time = datetime.combine(
+                        today, 
+                        datetime.min.time().replace(hour=MARKET_OPEN_HOUR, minute=MARKET_OPEN_MINUTE)
+                    )
                     df = df[df['datetime'] >= market_open_time]
             except Exception as e:
-                if self.update_count % 10 == 0:
+                if self.update_count % ERROR_LOG_INTERVAL == 0:
                     print(f"⚠️ VWAP datetime filtering error: {e}")
         
         if len(df) == 0 or 'v' not in df.columns or df['v'].sum() == 0:
@@ -1274,7 +1289,7 @@ class DataEngine:
                     self.vwap = float(vwap.iloc[-1])
                     return
             except Exception as e:
-                if self.update_count % 10 == 0:
+                if self.update_count % ERROR_LOG_INTERVAL == 0:
                     print(f"⚠️ pandas_ta VWAP calculation error: {e}")
         
         # Manual fallback calculation
@@ -1291,7 +1306,7 @@ class DataEngine:
                 # Fallback to LTP if no volume
                 self.vwap = self.fut_ltp if self.fut_ltp > 0 else float(df['c'].mean())
         except Exception as e:
-            if self.update_count % 10 == 0:
+            if self.update_count % ERROR_LOG_INTERVAL == 0:
                 print(f"⚠️ Manual VWAP calculation error: {e}")
             self.vwap = self.fut_ltp if self.fut_ltp > 0 else 0
     
