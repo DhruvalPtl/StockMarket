@@ -1157,13 +1157,16 @@ class DataEngine:
     
     def _calculate_indicators_fallback(self, df: pd.DataFrame, closes, highs, lows):
         """Fallback indicator calculations when pandas_ta is unavailable."""
+        # Small value to prevent division by zero
+        EPSILON = 1e-10
+        
         try:
             # Simple RSI calculation (approximation, not exact Wilder's)
             if len(closes) >= 14:
                 delta = closes.diff()
                 gain = delta.where(delta > 0, 0).rolling(window=14).mean()
                 loss = -delta.where(delta < 0, 0).rolling(window=14).mean()
-                rs = gain / loss.replace(0, 1e-10)
+                rs = gain / loss.replace(0, EPSILON)
                 rsi = 100 - (100 / (1 + rs))
                 if not pd.isna(rsi.iloc[-1]):
                     self.rsi = float(rsi.iloc[-1])
@@ -1178,8 +1181,9 @@ class DataEngine:
             # Simple ATR calculation
             if len(df) >= 14:
                 high_low = highs - lows
-                high_close = abs(highs - closes.shift())
-                low_close = abs(lows - closes.shift())
+                closes_prev = closes.shift()
+                high_close = abs(highs - closes_prev)
+                low_close = abs(lows - closes_prev)
                 ranges = pd.concat([high_low, high_close, low_close], axis=1)
                 true_range = ranges.max(axis=1)
                 atr = true_range.rolling(window=14).mean()
@@ -1194,13 +1198,17 @@ class DataEngine:
                 plus_dm = plus_dm.where((plus_dm > minus_dm) & (plus_dm > 0), 0)
                 minus_dm = minus_dm.where((minus_dm > plus_dm) & (minus_dm > 0), 0)
                 
-                tr = pd.concat([high_low, high_close, low_close], axis=1).max(axis=1)
-                atr_14 = tr.rolling(window=14).mean()
+                # Calculate true range for ADX (avoiding variable shadowing)
+                high_low_adx = highs - lows
+                high_close_adx = abs(highs - closes_prev)
+                low_close_adx = abs(lows - closes_prev)
+                tr_adx = pd.concat([high_low_adx, high_close_adx, low_close_adx], axis=1).max(axis=1)
+                atr_14 = tr_adx.rolling(window=14).mean()
                 
                 plus_di = 100 * (plus_dm.rolling(window=14).mean() / atr_14)
                 minus_di = 100 * (minus_dm.rolling(window=14).mean() / atr_14)
                 
-                dx = 100 * abs(plus_di - minus_di) / (plus_di + minus_di).replace(0, 1e-10)
+                dx = 100 * abs(plus_di - minus_di) / (plus_di + minus_di).replace(0, EPSILON)
                 adx = dx.rolling(window=14).mean()
                 
                 if not pd.isna(adx.iloc[-1]):
