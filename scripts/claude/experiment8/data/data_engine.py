@@ -1348,7 +1348,8 @@ class DataEngine:
         if 'time' in df.columns:
             try:
                 # Convert timestamp to IST datetime
-                if df['time'].dtype in ['int64', 'float64']:
+                from pandas.api.types import is_numeric_dtype
+                if is_numeric_dtype(df['time']):
                     # Unix timestamp - convert to IST
                     df['datetime'] = pd.to_datetime(df['time'], unit='s', errors='coerce')
                     df['datetime'] = df['datetime'].dt.tz_localize('UTC').dt.tz_convert(ist)
@@ -1404,7 +1405,8 @@ class DataEngine:
                     df_vwap = df_vwap.set_index('datetime')
                 elif 'time' in df.columns:
                     # Create datetime index from time column
-                    if df['time'].dtype in ['int64', 'float64']:
+                    from pandas.api.types import is_numeric_dtype
+                    if is_numeric_dtype(df['time']):
                         df_vwap.index = pd.to_datetime(df['time'], unit='s')
                     else:
                         df_vwap.index = pd.to_datetime(df['time'], dayfirst=True, errors='coerce')
