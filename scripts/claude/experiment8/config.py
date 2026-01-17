@@ -20,7 +20,7 @@ class BotConfig:
     # 1. FLATTRADE API CREDENTIALS & CONNECTION
     # ============================================================
     # User session token (generated via Flattrade login flow)
-    USER_TOKEN = "bd63de1dcc8c02128b0ad5cd33354abc9b4e6be0b87726664c6f0c5a34a3acfe"
+    USER_TOKEN = "8c58756be88e1fa4f1d4abca359858a6139828dba0264b7be22ab4e757710f9c"
     
     # User ID from Flattrade account
     USER_ID = "FZ31397"
