@@ -366,7 +366,7 @@ def get_future_symbol(expiry_date: str) -> str:
     try:
         dt = datetime.strptime(expiry_date, "%Y-%m-%d")
         date_str = dt.strftime("%d%b%y")
-        return f"NSE-NIFTY-{date_str}-FUT"
+        return f"NIFTY{date_str.upper()}F"
     except Exception as e:
         print(f"❌ Error generating future symbol: {e}")
         return "ERROR_SYMBOL"
@@ -377,7 +377,8 @@ def get_option_symbol(strike:  int, option_type: str, expiry_date: str) -> str:
     try:
         dt = datetime.strptime(expiry_date, "%Y-%m-%d")
         date_str = dt.strftime("%d%b%y")
-        return f"NSE-NIFTY-{date_str}-{strike}-{option_type}"
+        # Format: NIFTY20JAN26C20350
+        return f"NIFTY{date_str.upper()}{option_type[0]}{strike}"
     except Exception as e:
         print(f"❌ Error generating option symbol: {e}")
         return "ERROR_SYMBOL"
