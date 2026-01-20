@@ -452,7 +452,7 @@ class DataEngine:
             # Determine if we need full candle fetch
             need_candles = (full_fetch or 
                           self.last_candle_fetch is None or 
-                          (datetime.now() - self.last_candle_fetch).total_seconds() > 300 or
+                          (datetime.now() - self.last_candle_fetch).total_seconds() > 1 or
                           self.update_count <= 1)
             
             if need_candles:
