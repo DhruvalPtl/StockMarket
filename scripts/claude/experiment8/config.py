@@ -20,7 +20,7 @@ class BotConfig:
     # 1. FLATTRADE API CREDENTIALS & CONNECTION
     # ============================================================
     # User session token (generated via Flattrade login flow)
-    USER_TOKEN = "67e59eb37f6931699cbc5bf2b20e67403572120341624b0de47e7147119298ae"
+    USER_TOKEN = "8871e60a2c086f2a0b8787bf8e747e2eeafee61ad5998c5cfb312db4b11c5ebc"
     
     # User ID from Flattrade account
     USER_ID = "FZ31397"
@@ -36,7 +36,7 @@ class BotConfig:
     # ============================================================
     # 2.CONTRACT DETAILS
     # ============================================================
-    OPTION_EXPIRY = "2026-01-20"      # Weekly options expiry
+    OPTION_EXPIRY = "2026-01-27"      # Weekly options expiry
     FUTURE_EXPIRY = "2026-01-27"      # Monthly futures expiry
     
     # ============================================================

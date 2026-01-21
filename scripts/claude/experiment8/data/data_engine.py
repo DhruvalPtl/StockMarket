@@ -760,6 +760,67 @@ class DataEngine:
             print(f"❌ [{self.timeframe}] Token lookup error for {symbol}: {e}")
             return None
     
+    def _process_data_like_recorder(self, raw_data: list) -> pd.DataFrame:
+        """
+        Mirror of 'process_and_save_multiframe' from live_data_recorder.py.
+        1. Parse Time exactly like recorder
+        2. Rename columns
+        3. Remove Duplicates (CRITICAL FIX)
+        4. Resample
+        """
+        if not raw_data:
+            return pd.DataFrame()
+
+        # Safety: Ensure raw_data is a list
+        if isinstance(raw_data, dict):
+            raw_data = [raw_data]
+
+        df = pd.DataFrame(raw_data)
+
+        # 1. Standardize Time (Exact format from recorder)
+        if 'time' in df.columns:
+            df['datetime'] = pd.to_datetime(df['time'], format='%d-%m-%Y %H:%M:%S', errors='coerce')
+            df = df.sort_values('datetime')
+        
+        # 2. Rename columns to internal standard
+        col_map = {
+            'into': 'open', 'inth': 'high', 'intl': 'low', 'intc': 'close', 
+            'intv': 'volume', 'v': 'volume', 'oi': 'oi', 'intoi': 'oi'
+        }
+        df = df.rename(columns=col_map)
+        
+        # 3. CRITICAL FIX: Remove duplicate columns
+        # If both 'intv' and 'v' existed, we now have two 'volume' columns.
+        # This keeps the first one and drops the duplicates.
+        df = df.loc[:, ~df.columns.duplicated()]
+        
+        # 4. Ensure Numeric
+        cols = ['open', 'high', 'low', 'close', 'volume', 'oi']
+        for c in cols:
+            if c in df.columns:
+                df[c] = pd.to_numeric(df[c], errors='coerce')
+
+        # 5. Resample if timeframe > 1 minute
+        if self.timeframe != "1minute":
+            freq_map = {
+                "2minute": "2min", "3minute": "3min", "5minute": "5min", 
+                "15minute": "15min", "30minute": "30min", "60minute": "60min"
+            }
+            freq = freq_map.get(self.timeframe)
+            
+            if freq and 'datetime' in df.columns:
+                # Logic from recorder: set index, resample, agg
+                agg_dict = {
+                    'open': 'first', 'high': 'max', 'low': 'min', 'close': 'last', 'volume': 'sum'
+                }
+                # Handle OI if present
+                if 'oi' in df.columns:
+                    agg_dict['oi'] = 'last'
+                    
+                df = df.set_index('datetime').resample(freq).agg(agg_dict).dropna().reset_index()
+
+        return df
+
     def _fetch_spot_data(self):
         """Fetches spot index candles using Flattrade API."""
         if not self.is_connected:
@@ -870,123 +931,67 @@ class DataEngine:
             traceback.print_exc()
     
     def _fetch_future_data(self):
-        """Fetches futures candles using Flattrade API."""
+        """
+        Fetches future data using RECORDER LOGIC:
+        Always fetch 1-min data -> Resample to target timeframe.
+        """
         if not self.is_connected:
-            print(f"⚠️ [{self.timeframe}] Not connected to API - cannot fetch future data")
             return
-        
+
         try:
-            # Get token for future - Flattrade format: NIFTYXXMMMYYF (ends with F not FUT!)
-            # Extract from fut_symbol: "NSE-NIFTY-27Jan26-FUT" -> "NIFTY27JAN26F"
+            # 1. Get Token
             expiry_dt = datetime.strptime(self.future_expiry, "%Y-%m-%d")
             fut_search = f"NIFTY{expiry_dt.strftime('%d%b%y').upper()}F"
             token = self._get_token('NFO', fut_search)
             
             if not token:
-                # Try generic NIFTY search and filter
-                print(f"⚠️ [{self.timeframe}] Trying generic NIFTY futures search")
-                token = self._get_token('NFO', 'NIFTY')
-            
-            if not token:
-                print(f"⚠️ [{self.timeframe}] Could not get token for future {fut_search}")
-                return
-            
-            # Get current quote for LTP
+                token = self._get_token('NFO', 'NIFTY27JAN26F') 
+                if not token: return
+
+            # 2. Get Live Quote (LTP)
             quote = self.api.get_quotes(exchange='NFO', token=token)
             if quote and quote.get('stat') == 'Ok':
                 self.fut_ltp = float(quote.get('lp', 0))
-                self.fut_open = float(quote.get('o', 0))
-                self.fut_high = float(quote.get('h', 0))
-                self.fut_low = float(quote.get('l', 0))
-                self.fut_close = float(quote.get('c', self.fut_ltp))
-            
-            # Get historical candles
-            interval = self.timeframe_map.get(self.timeframe, '1')
-            # For indicators and VWAP, we need recent data
-            # Use 2 days to be safe for gaps and market hours
-            start_dt = datetime.now() - timedelta(days=2)
-            start_time = int(time.mktime(start_dt.timetuple()))
+
+            # 3. Get Historical Data
+            # CRITICAL: Always fetch 1 minute data (interval='1') like the recorder
+            # This ensures granular volume data for accurate VWAP
+            start_dt = datetime.now() - timedelta(days=3)
+            start_time = start_dt.timestamp()
             
             resp = self.api.get_time_price_series(
                 exchange='NFO',
                 token=token,
                 starttime=start_time,
-                interval=interval
+                interval='1'  # HARDCODED TO 1 MINUTE
             )
-            
-            if not resp or not isinstance(resp, list) or len(resp) == 0:
-                print(f"⚠️ [{self.timeframe}] Future API returned no data for {fut_search}")
-                return
-            
-            # Convert to DataFrame - Flattrade returns list of dicts with named fields
-            df = pd.DataFrame(resp)
-            
-            # Flattrade time series format: 'time', 'into' (open), 'inth' (high), 'intl' (low), 'intc' (close), 'v', 'oi'
-            # Rename columns to our standard format
-            column_mapping = {
-                'time': 'time',
-                'into': 'o',
-                'inth': 'h',
-                'intl': 'l',
-                'intc': 'c',
-                'v': 'v',
-                'oi': 'oi'
-            }
-            
-            # Rename columns that exist
-            df = df.rename(columns={k: v for k, v in column_mapping.items() if k in df.columns})
-            
-            # Convert numeric columns
-            for col in ['o', 'h', 'l', 'c', 'v']:
-                if col in df.columns:
-                    df[col] = pd.to_numeric(df[col], errors='coerce')
-            
-            # Remove invalid rows
-            df = df.dropna(subset=['o', 'h', 'l', 'c'])
+
+            # 4. Process Data (Clean & Resample)
+            df = self._process_data_like_recorder(resp)
             
             if len(df) == 0:
-                print(f"⚠️ [{self.timeframe}] No valid candle data after filtering (market may be closed)")
-                print(f"   This means all numeric values were NaN after conversion")
+                print(f"⚠️ [{self.timeframe}] Future data empty")
                 return
-            
+
+            # 5. Update attributes
             last_row = df.iloc[-1]
-            if self.fut_ltp == 0:
-                self.fut_ltp = float(last_row['c'])
-                self.fut_open = float(last_row['o'])
-                self.fut_high = float(last_row['h'])
-                self.fut_low = float(last_row['l'])
-                self.fut_close = float(last_row['c'])
+            self.fut_open = float(last_row['open'])
+            self.fut_high = float(last_row['high'])
+            self.fut_low = float(last_row['low'])
+            self.fut_close = float(last_row['close'])
+            self.current_volume = float(last_row['volume'])
+
+            # 6. Calculate Indicators (Standard TA)
+            self._calculate_indicators(df) 
             
-            # Volume
-            if 'v' in df.columns:
-                self.current_volume = float(last_row['v'])
-                self.volume_history.append(self.current_volume)
-                if len(self.volume_history) > 5:
-                    self.avg_volume = sum(list(self.volume_history)[:-1]) / (len(self.volume_history) - 1)
-                    self.volume_relative = self.current_volume / self.avg_volume if self.avg_volume > 0 else 1.0
-            
-            # Candle pattern
-            self.candle_body = abs(self.fut_close - self.fut_open)
-            self.candle_range = self.fut_high - self.fut_low
-            self.is_green_candle = self.fut_close > self.fut_open
-            
-            # Calculate ALL indicators from FUTURE data (matches Groww charts)
-            self._calculate_indicators(df)
-            
-            # Calculate VWAP from FUTURE data
+            # 7. Calculate VWAP (Manual Recorder Logic)
             self._calculate_vwap(df)
-            
-            if self.update_count % INDICATOR_DEBUG_INTERVAL == 0:
-                print(f"   ✅ Indicators calculated from {len(df)} FUTURE candles:")
-                print(f"      RSI: {self.rsi:.1f} | ADX: {self.adx:.1f} | ATR: {self.atr:.1f} | VWAP: {self.vwap:.2f}")
-            
+
         except Exception as e:
-            print(f"❌ [{self.timeframe}] Future fetch error: {e}")
+            print(f"❌ Future Fetch Error: {e}")
             import traceback
             traceback.print_exc()
-            if self.update_count % ERROR_LOG_INTERVAL == 0:
-                print(f"⚠️ Future fetch error: {e}")
-    
+
     def _fetch_option_chain(self):
         """
         Optimized option chain fetching:
@@ -1224,18 +1229,20 @@ class DataEngine:
         """
         Calculates technical indicators using pandas_ta for accuracy.
         Matches Groww/TradingView indicator values using Wilder's smoothing.
-        Falls back to manual calculations if pandas_ta is unavailable.
+        Compatible with 'open', 'high', 'low', 'close' column names.
         """
         if len(df) < 14:
             return
         
-        # Ensure numeric types
-        for col in ['o', 'h', 'l', 'c']:
-            df[col] = pd.to_numeric(df[col], errors='coerce')
+        # 1. FIX: Ensure numeric types using 'open', 'high', 'low', 'close'
+        for col in ['open', 'high', 'low', 'close']:
+            if col in df.columns:
+                df[col] = pd.to_numeric(df[col], errors='coerce')
         
-        closes = df['c']
-        highs = df['h']
-        lows = df['l']
+        # 2. FIX: Map columns correctly
+        closes = df['close']
+        highs = df['high']
+        lows = df['low']
         
         # DEBUG: Show what data we're using
         if self.update_count % 10 == 0:
@@ -1243,64 +1250,45 @@ class DataEngine:
             print(f"   Close range: {closes.min():.2f} to {closes.max():.2f}")
         
         if PANDAS_TA_AVAILABLE and ta is not None:
-            # Use pandas_ta for Wilder's smoothing (matches charting platforms)
             try:
-                # RSI with Wilder's RMA smoothing (default in pandas_ta)
+                # RSI with Wilder's RMA smoothing
                 rsi = ta.rsi(closes, length=14)
                 if rsi is not None and len(rsi) > 0 and not pd.isna(rsi.iloc[-1]):
                     self.rsi = float(rsi.iloc[-1])
-                    if self.update_count % 20 == 0:
-                        print(f"   RSI = {self.rsi:.2f} (pandas_ta with Wilder's RMA)")
                 
-                # EMAs (require sufficient data)
+                # EMAs
                 if len(closes) >= 50:
                     ema5 = ta.ema(closes, length=5)
                     ema13 = ta.ema(closes, length=13)
                     ema21 = ta.ema(closes, length=21)
                     ema50 = ta.ema(closes, length=50)
                     
-                    if ema5 is not None and not pd.isna(ema5.iloc[-1]):
-                        self.ema_5 = float(ema5.iloc[-1])
-                    if ema13 is not None and not pd.isna(ema13.iloc[-1]):
-                        self.ema_13 = float(ema13.iloc[-1])
-                    if ema21 is not None and not pd.isna(ema21.iloc[-1]):
-                        self.ema_21 = float(ema21.iloc[-1])
-                    if ema50 is not None and not pd.isna(ema50.iloc[-1]):
-                        self.ema_50 = float(ema50.iloc[-1])
+                    if ema5 is not None: self.ema_5 = float(ema5.iloc[-1])
+                    if ema13 is not None: self.ema_13 = float(ema13.iloc[-1])
+                    if ema21 is not None: self.ema_21 = float(ema21.iloc[-1])
+                    if ema50 is not None: self.ema_50 = float(ema50.iloc[-1])
                 
-                # ADX with Wilder's RMA smoothing
+                # ADX
                 adx_df = ta.adx(highs, lows, closes, length=14)
                 if adx_df is not None and 'ADX_14' in adx_df.columns:
-                    adx_val = adx_df['ADX_14'].iloc[-1]
-                    if not pd.isna(adx_val):
-                        self.adx = float(adx_val)
-                        if self.update_count % 20 == 0:
-                            print(f"   ADX = {self.adx:.2f} (pandas_ta with Wilder's smoothing)")
+                    val = adx_df['ADX_14'].iloc[-1]
+                    if not pd.isna(val): self.adx = float(val)
                 
-                # ATR with explicit RMA mode (Wilder's smoothing)
-                # Check if mamode parameter is supported in current pandas_ta version (cached)
-                if self._pandas_ta_atr_supports_mamode is None and ta is not None:
-                    atr_sig = inspect.signature(ta.atr)
-                    self._pandas_ta_atr_supports_mamode = 'mamode' in atr_sig.parameters
-                
+                # ATR
                 if self._pandas_ta_atr_supports_mamode:
                     atr = ta.atr(highs, lows, closes, length=14, mamode='rma')
                 else:
                     atr = ta.atr(highs, lows, closes, length=14)
                 
-                if atr is not None and len(atr) > 0 and not pd.isna(atr.iloc[-1]):
+                if atr is not None and not pd.isna(atr.iloc[-1]):
                     self.atr = float(atr.iloc[-1])
-                    if self.update_count % 20 == 0:
-                        print(f"   ATR = {self.atr:.2f} (pandas_ta with Wilder's RMA)")
                         
             except Exception as e:
-                if self.update_count % ERROR_LOG_INTERVAL == 0:
-                    print(f"⚠️ pandas_ta indicator calculation error: {e}")
+                print(f"⚠️ Indicators Error: {e}")
                 self._calculate_indicators_fallback(df, closes, highs, lows)
         else:
-            # Fallback to manual calculations
             self._calculate_indicators_fallback(df, closes, highs, lows)
-    
+
     def _calculate_indicators_fallback(self, df: pd.DataFrame, closes, highs, lows):
         """Fallback indicator calculations when pandas_ta is unavailable."""
         try:
@@ -1368,133 +1356,50 @@ class DataEngine:
     
     def _calculate_vwap(self, df: pd.DataFrame):
         """
-        Calculates VWAP from FUTURE candles - TODAY's session only (post 09:15 IST).
-        VWAP resets at market open each day.
-        Why? NIFTY is an index - it has NO volume!
-        Only NIFTY FUTURE has actual traded volume.
-        Compare: FUTURE price vs FUTURE VWAP
+        Calculates VWAP manually using EXACT logic from live_data_recorder.py.
+        Uses 'high', 'low', 'close', 'volume' columns.
         """
-        from pandas.api.types import is_numeric_dtype
-        
-        if len(df) == 0:
-            self.vwap = self.fut_ltp if self.fut_ltp > 0 else 0
+        # FIX: Check for 'volume' instead of 'v'
+        if df.empty or 'volume' not in df.columns:
+            self.vwap = self.fut_ltp
             return
-        
-        # Filter to today's IST session only (post 09:15 AM)
-        ist = timezone(timedelta(hours=5, minutes=30))
-        now_ist = datetime.now(ist)
-        today_ist = now_ist.date()
-        
-        df = df.copy()
-        
-        if 'time' in df.columns:
-            try:
-                # Convert timestamp to IST datetime
-                if is_numeric_dtype(df['time']):
-                    # Unix timestamp - convert to IST
-                    df['datetime'] = pd.to_datetime(df['time'], unit='s', errors='coerce')
-                    df['datetime'] = df['datetime'].dt.tz_localize('UTC').dt.tz_convert(ist)
-                else:
-                    # String datetime - parse and convert to IST
-                    df['datetime'] = pd.to_datetime(df['time'], errors='coerce', dayfirst=True)
-                    if df['datetime'].dt.tz is None:
-                        df['datetime'] = df['datetime'].dt.tz_localize(ist)
-                    else:
-                        df['datetime'] = df['datetime'].dt.tz_convert(ist)
-                
-                # Filter to today's date in IST
-                df = df[df['datetime'].dt.date == today_ist]
-                
-                # Filter to post-market-open (>= 09:15 AM IST)
-                if len(df) > 0:
-                    market_open_time = datetime.combine(
-                        today_ist,
-                        datetime.min.time().replace(hour=MARKET_OPEN_HOUR, minute=MARKET_OPEN_MINUTE)
-                    ).replace(tzinfo=ist)
-                    df = df[df['datetime'] >= market_open_time]
-                
-                # Debug output every 10 updates
-                if self.update_count % DEBUG_LOG_INTERVAL == 0 and len(df) > 0:
-                    print(f"   📊 VWAP Debug:")
-                    print(f"      Using {len(df)} candles from today's session")
-                    print(f"      First: {df['datetime'].iloc[0]}, Last: {df['datetime'].iloc[-1]}")
-                    print(f"      Volume sum: {df['v'].sum():,.0f}")
-            except Exception as e:
-                if self.update_count % ERROR_LOG_INTERVAL == 0:
-                    print(f"⚠️ VWAP datetime filtering error: {e}")
-                # Continue with unfiltered data as fallback
-        
-        # Validate we have volume data
-        if len(df) == 0 or 'v' not in df.columns or df['v'].sum() == 0:
-            # No valid data for VWAP calculation - use LTP or average close
-            if self.fut_ltp > 0:
-                self.vwap = self.fut_ltp
-            elif len(df) > 0 and 'c' in df.columns:
-                self.vwap = float(df['c'].mean())
-            else:
-                self.vwap = 0
-            
-            if self.update_count % ERROR_LOG_INTERVAL == 0:
-                print(f"⚠️ VWAP: No volume data, using fallback (LTP={self.fut_ltp:.2f})")
-            return
-        
-        # Use pandas_ta VWAP if available
-        if PANDAS_TA_AVAILABLE and ta is not None:
-            try:
-                # CRITICAL: pandas_ta VWAP requires DatetimeIndex
-                df_vwap = df.copy()
-                
-                # Set proper DatetimeIndex
-                if 'datetime' in df.columns and not df['datetime'].isna().all():
-                    df_vwap = df_vwap.set_index('datetime')
-                elif 'time' in df.columns:
-                    # Create datetime index from time column
-                    if is_numeric_dtype(df['time']):
-                        df_vwap.index = pd.to_datetime(df['time'], unit='s')
-                    else:
-                        df_vwap.index = pd.to_datetime(df['time'], dayfirst=True, errors='coerce')
-                else:
-                    # No time column available, cannot create DatetimeIndex
-                    available_cols = list(df.columns)
-                    raise ValueError(f"Neither 'datetime' nor 'time' column found in dataframe. Available columns: {available_cols}")
-                
-                # Sort by datetime for proper VWAP calculation
-                df_vwap = df_vwap.sort_index()
-                
-                # Remove any NaT (invalid dates)
-                df_vwap = df_vwap[df_vwap.index.notna()]
-                
-                if len(df_vwap) > 0:
-                    # Now pandas_ta VWAP will work correctly with DatetimeIndex
-                    vwap = ta.vwap(df_vwap['h'], df_vwap['l'], df_vwap['c'], df_vwap['v'])
-                    if vwap is not None and len(vwap) > 0 and not pd.isna(vwap.iloc[-1]):
-                        self.vwap = float(vwap.iloc[-1])
-                        if self.update_count % DEBUG_LOG_INTERVAL == 0:
-                            print(f"      Calculated VWAP: ₹{self.vwap:.2f}")
-                            print(f"      Current FUT LTP: ₹{self.fut_ltp:.2f}")
-                        return
-            except Exception as e:
-                if self.update_count % ERROR_LOG_INTERVAL == 0:
-                    print(f"⚠️ pandas_ta VWAP calculation error: {e}")
-        
-        # Manual fallback calculation
+
         try:
-            typical_price = (df['h'] + df['l'] + df['c']) / 3
-            cumulative_tp_vol = (typical_price * df['v']).cumsum()
-            cumulative_vol = df['v'].cumsum()
+            df = df.copy()
             
-            # Guard against division by zero
-            if cumulative_vol.iloc[-1] > 0:
-                vwap_series = cumulative_tp_vol / cumulative_vol
-                self.vwap = float(vwap_series.iloc[-1])
-            else:
-                # Fallback to LTP if no volume
-                self.vwap = self.fut_ltp if self.fut_ltp > 0 else float(df['c'].mean())
+            # 1. Filter for Today's Data Only
+            if 'datetime' in df.columns:
+                df['date_temp'] = df['datetime'].dt.date
+                today = datetime.now().date()
+                df = df[df['date_temp'] == today].copy()
+            
+            if len(df) == 0:
+                self.vwap = self.fut_ltp
+                return
+
+            # 2. RECORDER MATH LOGIC
+            # FIX: Use 'high', 'low', 'close' instead of 'h', 'l', 'c'
+            df['tp'] = (df['high'] + df['low'] + df['close']) / 3
+            df['pv'] = df['tp'] * df['volume']
+            
+            # Cumulative Sums
+            df['cum_pv'] = df['pv'].cumsum()
+            df['cum_vol'] = df['volume'].cumsum()
+            
+            # VWAP Calculation
+            df['vwap'] = df['cum_pv'] / df['cum_vol']
+            
+            # 3. Update Engine State
+            if not pd.isna(df['vwap'].iloc[-1]):
+                self.vwap = float(df['vwap'].iloc[-1])
+            
+            if self.update_count % 10 == 0:
+                print(f"   📊 VWAP (Manual): {self.vwap:.2f} | Vol: {df['cum_vol'].iloc[-1]:,.0f}")
+
         except Exception as e:
-            if self.update_count % ERROR_LOG_INTERVAL == 0:
-                print(f"⚠️ Manual VWAP calculation error: {e}")
-            self.vwap = self.fut_ltp if self.fut_ltp > 0 else 0
-    
+            print(f"⚠️ VWAP Calculation Error: {e}")
+            self.vwap = self.fut_ltp
+            
     def _update_opening_range(self):
         """Updates opening range during first 15 minutes."""
         if self.opening_range_set: 

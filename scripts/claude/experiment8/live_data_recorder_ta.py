@@ -1,6 +1,7 @@
 import os
 import sys
 import pandas as pd
+import pandas_ta as ta
 from datetime import datetime
 
 # 1. SETUP PATHS & IMPORTS
@@ -22,7 +23,7 @@ except ImportError as e:
 
 # 2. OUTPUT DIRECTORY
 # ------------------------------------------------------------------------------
-DATA_DIR = os.path.join(current_dir, 'data_dump')
+DATA_DIR = os.path.join(current_dir, 'csv')
 os.makedirs(DATA_DIR, exist_ok=True)
 print(f"📂 Output Folder: {DATA_DIR}")
 
@@ -103,40 +104,25 @@ def process_and_save_multiframe(res_data, base_filename, data_dir):
             df['vwap'] = df['cum_pv'] / df['cum_vol']
             df.drop(columns=['tp', 'pv', 'date_temp', 'cum_pv', 'cum_vol'], inplace=True)
 
-            # --- Indicators (EMA, RSI, ATR, ADX) ---
-            # EMA
-            df['ema5'] = df['intc'].ewm(span=5, adjust=False).mean()
-            df['ema13'] = df['intc'].ewm(span=13, adjust=False).mean()
+            # --- Indicators using pandas_ta ---
+            try:
+                # EMA
+                df['ema5'] = ta.ema(df['intc'], length=5)
+                df['ema13'] = ta.ema(df['intc'], length=13)
 
-            # RSI (14)
-            delta = df['intc'].diff()
-            gain = (delta.where(delta > 0, 0)).ewm(alpha=1/14, adjust=False).mean()
-            loss = (-delta.where(delta < 0, 0)).ewm(alpha=1/14, adjust=False).mean()
-            rs = gain / loss
-            df['rsi'] = 100 - (100 / (1 + rs))
+                # RSI (14)
+                df['rsi'] = ta.rsi(df['intc'], length=14)
 
-            # ATR (14)
-            prev_c = df['intc'].shift(1)
-            tr1 = df['inth'] - df['intl']
-            tr2 = (df['inth'] - prev_c).abs()
-            tr3 = (df['intl'] - prev_c).abs()
-            tr = pd.concat([tr1, tr2, tr3], axis=1).max(axis=1)
-            df['atr'] = tr.ewm(alpha=1/14, adjust=False).mean()
+                # ATR (14)
+                df['atr'] = ta.atr(df['inth'], df['intl'], df['intc'], length=14)
 
-            # ADX (14)
-            up = df['inth'].diff()
-            down = -df['intl'].diff()
-            plus_dm = pd.Series(0.0, index=df.index)
-            minus_dm = pd.Series(0.0, index=df.index)
-            
-            plus_dm[(up > down) & (up > 0)] = up[(up > down) & (up > 0)]
-            minus_dm[(down > up) & (down > 0)] = down[(down > up) & (down > 0)]
-            
-            atr_smooth = tr.ewm(alpha=1/14, adjust=False).mean()
-            plus_di = 100 * (plus_dm.ewm(alpha=1/14, adjust=False).mean() / atr_smooth)
-            minus_di = 100 * (minus_dm.ewm(alpha=1/14, adjust=False).mean() / atr_smooth)
-            dx = 100 * (plus_di - minus_di).abs() / (plus_di + minus_di)
-            df['adx'] = dx.ewm(alpha=1/14, adjust=False).mean()
+                # ADX (14)
+                adx_df = ta.adx(df['inth'], df['intl'], df['intc'], length=14)
+                if adx_df is not None and not adx_df.empty:
+                    # pandas_ta returns columns like ADX_14, DMP_14, DMN_14
+                    df['adx'] = adx_df['ADX_14']
+            except Exception as e:
+                print(f"   ⚠️ TA Calculation Error: {e}")
 
         # Save
         filename = f"{base_filename}_{tf}min_{datetime.now().strftime('%Y%m%d')}.csv"
@@ -225,9 +211,8 @@ def fetch_and_save(api):
     else:
         spot_price = 0
         print("   ❌ Could not fetch Spot Price")
-# 5. EXECUTION
-# ------------------------------------------------------------------------------
+
 if __name__ == "__main__":
     api_instance = login_and_fetch()
     fetch_and_save(api_instance)
-    print("\n🏁 Done. Check the 'data_dump' folder.")
+    print("\n🏁 Done. Check the 'csv' folder.")
