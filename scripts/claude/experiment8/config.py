@@ -272,7 +272,9 @@ class BotConfig:
     DEBUG_MODE = False
     VERBOSE_LOGGING = True
     
-    BASE_LOG_PATH = r"D:\\StockMarket\\StockMarket\\scripts\\claude\\experiment8\\log"
+    # BASE_LOG_PATH = r"D:\\StockMarket\\StockMarket\\scripts\\claude\\experiment8\\log"
+    BASE_LOG_PATH = "/home/ubuntu/StockMarket/scripts/claude/experiment8/log"
+
     
     @classmethod
     def get_log_paths(cls) -> Dict[str, str]: 
